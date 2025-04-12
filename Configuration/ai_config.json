@@ -1,0 +1,11 @@
+{
+	"ball_confidence": 0.4,
+	"people_confidence": 0.5,
+	"min_ball_size": 6,
+	"ball_mean_saturation": 50,
+	"ball_mean_value": 60,
+	"ball_do_deep_check": false,
+	"detection_first_stage_frames": 6,
+	"detection_last_stage_on_best_frames": 12,
+	"detection_last_stage_on_both_centers_frames": 6
+}

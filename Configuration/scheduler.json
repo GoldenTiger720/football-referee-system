@@ -1,0 +1,25 @@
+[{
+    "sportunity_id": "U3BvcnR1bml0eTo2NjI4ODcwYzQ1YTU0NDAwNjZjNDNkMzE=",
+    "start_time": "2024.05.07 22:30",
+    "duration_min": 60,
+    "team_1": "Team 1",
+    "team_2": "Team 2",
+    "team_1_rgb": [
+        127,
+        127,
+        127
+    ],
+    "team_2_rgb": [
+        127,
+        127,
+        255
+    ],
+    "organizer": "Organizer's name",
+    "participants": [
+        "player1",
+        "player2",
+        "player3"
+    ],
+    "description": "Football test",
+    "type": "Friendly"
+}]

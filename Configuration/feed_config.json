@@ -1,0 +1,346 @@
+{
+    "starting_position_sec": 0,
+    "source": "rtsp",
+    "recording_folder": "c:/Develop/recordings/",
+    "video_out_folder": "c:/Develop/VideoOutput/",
+    "highligths_folder": "c:/Develop/VideoOutput/highlights/",
+    "mode": "streaming",
+    "field": 2,
+    "duration_min": 59,
+    "recording_id": "228513534",
+    "sportunity": "U3BvcnR1bml0eTo2N2Y5NDI2MjE4YzFiMTAwNDk4ODRkMDk=",
+    "team1": "Team A",
+    "team2": "Team B",
+    "venue": "La Halle",
+    "html_feed_enabled": true,
+    "disable_video_generation": false,
+    "camera_settings": [
+        {
+            "field_id": 2,
+            "camera_id": 1,
+            "enabled": true,
+            "print_frame": false,
+            "width": 960,
+            "height": 576,
+            "source_file": "c:/Develop/recordings/20240827_155820_1.avi",
+            "source_rtsp": "rtsp://admin:GCexperience@192.168.1.229:554/Streaming/channels/101",
+            "video_fps": 25,
+            "feed_fps": 25,
+            "description": "Side A",
+            "capture_only_device": false,
+            "detection_type": "normal",
+            "center": false,
+            "slaves": [],
+            "masks": [
+                {
+                    "cam": 1,
+                    "x": 547,
+                    "y": 144,
+                    "w": 9,
+                    "h": 6
+                },
+                {
+                    "cam": 1,
+                    "x": 345,
+                    "y": 116,
+                    "w": 9,
+                    "h": 6
+                }
+            ]
+        },
+        {
+            "field_id": 2,
+            "camera_id": 0,
+            "enabled": true,
+            "print_frame": false,
+            "width": 960,
+            "height": 576,
+            "source_file": "c:/Develop/recordings/20240827_155820_0.avi",
+            "source_rtsp": "rtsp://admin:GCexperience@192.168.1.230:554/Streaming/channels/101",
+            "video_fps": 25,
+            "feed_fps": 25,
+            "description": "Side B",
+            "capture_only_device": false,
+            "detection_type": "normal",
+            "center": false,
+            "slaves": [],
+            "masks": [
+                {
+                    "cam": 0,
+                    "x": 448,
+                    "y": 125,
+                    "w": 8,
+                    "h": 6
+                },
+                {
+                    "cam": 0,
+                    "x": 642,
+                    "y": 77,
+                    "w": 8,
+                    "h": 6
+                }
+            ]
+        },
+        {
+            "field_id": 2,
+            "camera_id": 4,
+            "enabled": true,
+            "print_frame": false,
+            "width": 2300,
+            "height": 896,
+            "source_file": "c:/Develop/recordings/20240827_155820_4.avi",
+            "source_rtsp": "rtsp://admin:GCexperience@192.168.1.232:554/Streaming/channels/101",
+            "video_fps": 25,
+            "feed_fps": 25,
+            "description": "Center",
+            "capture_only_device": true,
+            "detection_type": "normal",
+            "center": true,
+            "original_w": 2688,
+            "original_h": 1520,
+            "center_crop": {
+                "x": 144,
+                "y": 418,
+                "w": 2300,
+                "h": 900
+            },
+            "center_crop_resize": {
+                "w": 2300,
+                "h": 896
+            },
+            "slaves": [
+                2,
+                10,
+                11
+            ],
+            "masks": [
+                {
+                    "cam": 2,
+                    "x": 583,
+                    "y": 279,
+                    "w": 12,
+                    "h": 9
+                },
+                {
+                    "cam": 2,
+                    "x": 1143,
+                    "y": 297,
+                    "w": 12,
+                    "h": 9
+                },
+                {
+                    "cam": 2,
+                    "x": 0,
+                    "y": 0,
+                    "w": 1280,
+                    "h": 30
+                },
+                {
+                    "cam": 3,
+                    "x": 0,
+                    "y": 0,
+                    "w": 1280,
+                    "h": 30
+                },
+                {
+                    "cam": 3,
+                    "x": 123,
+                    "y": 297,
+                    "w": 12,
+                    "h": 9
+                },
+                {
+                    "cam": 3,
+                    "x": 640,
+                    "y": 314,
+                    "w": 12,
+                    "h": 9
+                }
+            ],
+            "slave_regions": [
+                {
+                    "cam": 2,
+                    "x": 0,
+                    "y": 0,
+                    "source": "center_crop_resize",
+                    "desc": "center left"
+                },
+                {
+                    "cam": 3,
+                    "x": 1020,
+                    "y": 0,
+                    "source": "center_crop_resize",
+                    "desc": "center righ"
+                },
+                {
+                    "cam": 10,
+                    "x": 2052,
+                    "y": 642,
+                    "w": 288,
+                    "h": 224,
+                    "source": "original",
+                    "desc": "goal right"
+                },
+                {
+                    "cam": 11,
+                    "x": 350,
+                    "y": 580,
+                    "w": 288,
+                    "h": 224,
+                    "source": "original",
+                    "desc": "goal left"
+                }
+            ]
+        },
+        {
+            "field_id": 1,
+            "camera_id": 0,
+            "enabled": true,
+            "print_frame": false,
+            "width": 960,
+            "height": 576,
+            "source_file": "c:/Develop/recordings/20240603_190123_0.avi",
+            "source_rtsp": "rtsp://admin:GCexperience@192.168.1.231:554/Streaming/channels/101",
+            "video_fps": 25,
+            "feed_fps": 25,
+            "description": "Side A",
+            "capture_only_device": false,
+            "detection_type": "normal",
+            "center": false,
+            "slaves": [],
+            "masks": [
+                {
+                    "cam": 0,
+                    "x": 472,
+                    "y": 134,
+                    "w": 8,
+                    "h": 6
+                }
+            ]
+        },
+        {
+            "field_id": 1,
+            "camera_id": 1,
+            "enabled": true,
+            "print_frame": false,
+            "width": 960,
+            "height": 576,
+            "source_file": "c:/Develop/recordings/20240603_190123_1.avi",
+            "source_rtsp": "rtsp://admin:GCexperience@192.168.1.228:554/Streaming/channels/101",
+            "video_fps": 25,
+            "feed_fps": 25,
+            "description": "Side B",
+            "capture_only_device": false,
+            "detection_type": "normal",
+            "center": false,
+            "slaves": [],
+            "masks": [
+                {
+                    "cam": 1,
+                    "x": 366,
+                    "y": 135,
+                    "w": 9,
+                    "h": 6
+                }
+            ]
+        },
+        {
+            "field_id": 1,
+            "camera_id": 4,
+            "enabled": true,
+            "print_frame": false,
+            "width": 1280,
+            "height": 896,
+            "source_file": "c:/Develop/recordings/20240603_190123_4.avi",
+            "source_rtsp": "rtsp://admin:GCexperience@192.168.1.100:554/Streaming/channels/101",
+            "video_fps": 25,
+            "feed_fps": 25,
+            "description": "Center",
+            "capture_only_device": true,
+            "detection_type": "normal",
+            "center": true,
+            "original_w": 2688,
+            "original_h": 1520,
+            "center_crop": {
+                "x": 144,
+                "y": 418,
+                "w": 2300,
+                "h": 900
+            },
+            "center_crop_resize": {
+                "w": 2300,
+                "h": 896
+            },
+            "slaves": [
+                2,
+                3,
+                10,
+                11
+            ],
+            "masks": [
+                {
+                    "cam": 2,
+                    "x": 462,
+                    "y": 270,
+                    "w": 12,
+                    "h": 9
+                },
+                {
+                    "cam": 2,
+                    "x": 914,
+                    "y": 284,
+                    "w": 12,
+                    "h": 9
+                },
+                {
+                    "cam": 3,
+                    "x": 123,
+                    "y": 295,
+                    "w": 12,
+                    "h": 9
+                },
+                {
+                    "cam": 3,
+                    "x": 470,
+                    "y": 314,
+                    "w": 12,
+                    "h": 9
+                }
+            ],
+            "slave_regions": [
+                {
+                    "cam": 2,
+                    "x": 0,
+                    "y": 0,
+                    "source": "center_crop_resize",
+                    "desc": "center left"
+                },
+                {
+                    "cam": 3,
+                    "x": 1020,
+                    "y": 0,
+                    "source": "center_crop_resize",
+                    "desc": "center righ"
+                },
+                {
+                    "cam": 10,
+                    "x": 1870,
+                    "y": 595,
+                    "w": 300,
+                    "h": 220,
+                    "source": "original",
+                    "desc": "goal right"
+                },
+                {
+                    "cam": 11,
+                    "x": 240,
+                    "y": 540,
+                    "w": 300,
+                    "h": 220,
+                    "source": "original",
+                    "desc": "goal left"
+                }
+            ]
+        }
+    ]
+}

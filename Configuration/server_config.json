@@ -1,0 +1,14 @@
+{
+	"field_id":2,
+	"field_name":"Football 5*5 - Terrain 2",
+	"chromecast": "Accueil-2",
+	"highlight_folder": "C:\\Develop\\VideoOutput\\highlights\\2",
+	"highlight_save": "C:\\Develop\\VideoOutput\\highlights\\save",
+	"url":"http://192.168.1.10:8092/highlights/2/",	
+	"http_port":8092,
+	"http_live_port":8093,
+	"server_ip":"213.200.236.214",
+	"onscreen_text": "Sportunity VAR v1.05  BETA",
+	"onscreen_text_x_pos":760,
+	"onscreen_text_y_pos":565
+}
