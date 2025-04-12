@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package proto_messages;
+
+// Message for sending OpenCV frame information
+message FrameData {
+  uint32 frame_id = 1;        // Unique identifier for the frame
+  uint32 cycle = 2;
+  uint32 position = 3;
+  uint32 camera_id = 4;       // Identifier for the camera that captured the frame
+  uint32 width = 5;
+  uint32 height = 6;
+  uint64 unix_timestamp = 7; 
+  bytes frame = 8;            // The frame data, encoded as a byte array (e.g., JPEG or PNG encoded image)
+}

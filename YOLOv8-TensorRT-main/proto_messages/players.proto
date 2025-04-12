@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package footplayer;
+
+// Define the FootPlayer message
+message FootPlayer {
+  int32 x1 = 1;
+  int32 x2 = 2;
+  int32 y1 = 3;
+  int32 y2 = 4;
+  int32 x_2d = 5;
+  int32 y_2d = 6;
+  int32 confidence = 7;
+  int32 img_w = 8;
+  int32 img_h = 9;
+  bytes img = 10; // Image data serialized as bytes
+}
+
+message FootPlayerCollection {
+  int32 cycle = 1;
+  int32 position = 2;
+  int32 ball_x = 3;
+  int32 ball_y = 4;
+  int32 ball_x_2d = 5;
+  int32 ball_y_2d = 6;
+  int32 ball_radius = 7;
+  int32 img_w = 8;
+  int32 img_h = 9;
+  bytes img = 10;
+  repeated FootPlayer players = 11; // List of players
+}
