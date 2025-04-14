@@ -2,6 +2,7 @@ import time
 from pathlib import Path
 import numpy as np
 import cv2
+import csv
 import logging
 import os
 import queue
@@ -133,14 +134,25 @@ def send_camera_event(camera_id, event_type, duration):
        print("  notification not sent due to another active notification from the last 10 sec")
 
 def process_detection_results(publisher, detector, cycle):
-    global score_cntr_l, score_cntr_r, match_time, previous_ball_speed_kmh, kick_detected, kick_ttl, last_ball_direction, currentAction, last_valid_ball_x, last_valid_ball_y, prev_acceleration, player_publisher
+    global score_cntr_l, score_cntr_r, match_time, previous_ball_speed_kmh, kick_detected, kick_ttl, last_ball_direction, currentAction, last_valid_ball_x, last_valid_ball_y, prev_acceleration, player_publisher, ai_settings
     detector_selected_cam = detector.best_camera
     detector_process_time = detector.last_proc_time
     detector_broadcast_cam = detector.broadcast_camera
 
-    print("Last detector cycle:",detector.detector_cycle)
+    print("Last detector cycle:", detector.detector_cycle)
     print("Selected camera:", detector_selected_cam)
     print("Process time:", detector_process_time)
+
+    # Initialize CSV writer for player positions - ADDED CODE
+    from player_position_collector import collect_player_positions, save_player_position
+    
+    # Create the CSV filename with timestamp to ensure uniqueness
+    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    player_csv_path = os.path.join(ai_settings.video_out_folder, f'player_positions_{timestamp_str}.csv')
+    csv_writer, timestamp = collect_player_positions(player_csv_path)
+    
+    print(f"Logging player positions to: {player_csv_path}")
+    # END OF ADDED CODE
 
     other_cam = -1
     if detector_selected_cam==3:
@@ -183,8 +195,6 @@ def process_detection_results(publisher, detector, cycle):
                     if moving_average_acceleration>-1 and moving_average_acceleration<=1:
                         moving_average_acceleration=0
 
-
-
                     dy = det_obj.y1- last_valid_ball_y
                     dx = det_obj.x1 - last_valid_ball_x
                     angle_radians = math.atan2(dy, dx)
@@ -196,7 +206,6 @@ def process_detection_results(publisher, detector, cycle):
                     last_valid_ball_y = det_obj.y1
                     last_valid_ball_x = det_obj.x1
 
-
                     kicked=False
                     
                     previous_ball_speed_kmh = moving_average_speed                    
@@ -207,8 +216,6 @@ def process_detection_results(publisher, detector, cycle):
                         direction_delta = abs(last_ball_direction - det_obj.ball_direction)
 
                         direction_delta = min(direction_delta, abs(360-direction_delta))
-
-                        
                         
                         if direction_delta>80 and moving_average_speed>5:
                             det_obj.ball_direction_change=True
@@ -216,7 +223,6 @@ def process_detection_results(publisher, detector, cycle):
                             print("KICK DETECTION SET TO FALSE - DIRECTION", cycle, det_obj.position, last_ball_direction,  det_obj.ball_direction, direction_delta)
                         
                         last_ball_direction = det_obj.ball_direction
-
 
                     if moving_average_acceleration<2 and moving_average_speed<2:
                         kick_detected=False
@@ -262,8 +268,6 @@ def process_detection_results(publisher, detector, cycle):
 
     overall_stat.cycle_cntr+=1
 
-    
-
     for cam in cameras:
         if cam.capture_only_device ==False:
             cam_info = CamInfo()
@@ -308,7 +312,6 @@ def process_detection_results(publisher, detector, cycle):
             goal_r_cam=cam
 
     gameplayer_collection = PlayerCollection()
-
 
 #REMOVE IT!!!!!!!!!!!
     detector_selected_cam = 2
@@ -403,8 +406,10 @@ def process_detection_results(publisher, detector, cycle):
                                 player.x_2d, player.y_2d = cam.convert_player_to_2d(int((player.x1+player.x2)/2), int(player.y2)-15)
                                 bounding_img = det_obj.frame[player.y1:player.y2,player.x1:player.x2]
                                 player.player_id = player_tracker.register(bounding_img, player, cycle, det_obj.position)
-                                #player_publisher.send(create_player_protobuf_msg(cycle, , player.x1, player.x2, 
-                                #                                                 player.y1, player.y2, player.x_2d, player.y_2d, bounding_img))
+                                
+                                # Log player position - ADDED CODE
+                                save_player_position(csv_writer, timestamp, cycle, det_obj.position, player)
+                                # END OF ADDED CODE
 
                                 if player_collection:
                                     height, width = bounding_img.shape[:2]
@@ -428,8 +433,6 @@ def process_detection_results(publisher, detector, cycle):
                                     distance_3 = distance_between_points(ball_point_x, ball_point_y, player.x2, player_point_y)
 
                                     distance = min(distance_1, distance_2, distance_3)
-
-                                    #player.x_2d
 
                                     if (closest_distance is None or distance < closest_distance):
                                         closest_distance = distance
@@ -482,8 +485,6 @@ def process_detection_results(publisher, detector, cycle):
                     for pl in all_players:
                         cj+=1
                         print(f'[{cj}] 2dx:{pl.x_2d},2dy:{pl.y_2d}, cam:{pl.cam_id} = {pl.y_2d} -> {pl.x1}:{pl.y1} - {pl.x2}:{pl.y2} [w:{pl.x2-pl.x1},h:{pl.y2-pl.y1}] Ball Distance: {pl.ball_distance}, ball x,y: {pl.ball_x}, {pl.ball_y}')
-
-
 
 def trigger_camera_event():
     even_type = f'AI_FIELD_{ai_settings.field_id}_ALARM1'
@@ -1229,8 +1230,18 @@ def calculate_moving_average(queue, new_speed, queue_size=MAX_SPEED_MVG_AVRG):
 #     cap.release()
 #     return True
 
-def process_single_frame(detector, frame, cycle, position):
-    """Process a single video frame directly with the detector"""
+def process_single_frame(detector, frame, cycle, position, csv_writer=None, team_identifier=None):
+    """
+    Process a single video frame directly with the detector and save player positions to CSV
+    
+    Args:
+        detector: AI detector object
+        frame: Video frame to process
+        cycle: Current detection cycle
+        position: Position within cycle
+        csv_writer: CSV writer object for logging player positions
+        team_identifier: TeamIdentifier object for team classification
+    """
     # Create a copy of the frame for processing
     w, h = 2300, 896
     if frame.shape[1] > 1000:
@@ -1244,11 +1255,18 @@ def process_single_frame(detector, frame, cycle, position):
     det_obj = Detector(0, 0, position, cycle, DetectionType.NORMAL)
     det_obj.frame = resized_frame
     
+    # Generate timestamp for logging
+    timestamp = f"{cycle//60:02d}:{cycle%60:02d}.{position:02d}"
+    
+    # Track ball position
+    ball_x = -1
+    ball_y = -1
+    ball_x_2d = -1
+    ball_y_2d = -1
+    
     # Run detection on this frame
     try:
         # Get tensor representation
-          # Standard processing size
-        
         tensor = create_tensor(resized_frame, detector.device, w, h)
         if tensor is None:
             print("Failed to create tensor from frame")
@@ -1273,10 +1291,24 @@ def process_single_frame(detector, frame, cycle, position):
             'ball': BallCoords(),
             'players': []
         }
-        plyaer_num = 0
+        
         # Check if any objects were detected
         if bboxes.numel() > 0:
-            # Process detections (balls, players)
+            # First, find the ball (needed to calculate player-ball distance)
+            for (bbox, score, label) in zip(bboxes, scores, labels):
+                bbox = bbox.round().int().tolist()
+                cls_id = int(label)
+                if cls_id == 0 and score >= 0.4:  # Ball detection
+                    x1, y1 = bbox[:2]
+                    x2, y2 = bbox[2:]
+                    ball_x = (x1 + x2) / 2
+                    ball_y = (y1 + y2) / 2
+                    # Convert to 2D field coordinates (simplified mapping)
+                    ball_x_2d = int(ball_x / w * 500)  # Map to 500-unit field width
+                    ball_y_2d = int(ball_y / h * 250)  # Map to 250-unit field height
+                    break
+            
+            # Now process all detections (balls, players)
             for (bbox, score, label) in zip(bboxes, scores, labels):
                 bbox = bbox.round().int().tolist()
                 cls_id = int(label)
@@ -1285,29 +1317,82 @@ def process_single_frame(detector, frame, cycle, position):
                 
                 # Handle player detection
                 if cls_id == 1 and score >= 0.3:
-                    plyaer_num += 1
                     player = Player()
                     player.x1 = int(x1)
                     player.x2 = int(x2)
                     player.y1 = int(y1)
                     player.y2 = int(y2)
                     player.confidence = float(score)
-
-                    player_img = frame_copy[player.y1:player.y2, player.x1:player.x2]
-                    seg_results = seg_model(frame_copy, conf=conf_threshold, classes=2)
-                    print(seg_results)
-                    # pose_results = pose_model(player_img, conf=conf_threshold)
-                    # seg_result = pose_results[0]
-                    # cv2.imwrite(f'aa_{plyaer_num}.png', player_img)
-
-                    # Draw player box
-                    cv2.rectangle(frame_copy, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
                     
-                    # Add to results
+                    # Calculate player center
+                    center_x = (x1 + x2) / 2
+                    center_y = (y1 + y2) / 2
+                    
+                    # Convert to 2D field coordinates (simplified mapping)
+                    player_x_2d = int(center_x / w * 500)  # Map to 500-unit field width
+                    player_y_2d = int(center_y / h * 250)  # Map to 250-unit field height
+                    
+                    # Set 2D coordinates
+                    player.x_2d = player_x_2d
+                    player.y_2d = player_y_2d
+                    
+                    # Calculate distance to ball if ball is detected
+                    distance_to_ball = -1
+                    if ball_x != -1 and ball_y != -1:
+                        distance_to_ball = distance_between_points(center_x, center_y, ball_x, ball_y)
+                        player.ball_distance = distance_to_ball
+                        player.ball_x = ball_x
+                        player.ball_y = ball_y
+                    
+                    # Assign a unique ID (simplified - in a real system would use tracking)
+                    player.player_id = hash((x1, y1, x2, y2)) % 1000  # Simple hash-based ID
+                    
+                    # Extract player image for team identification
+                    player_img = frame_copy[int(y1):int(y2), int(x1):int(x2)]
+                    
+                    # Determine team if team_identifier is provided
+                    team_id = -1
+                    display_color = (255, 255, 255)  # Default: white
+                    
+                    if team_identifier is not None and player_img.size > 0:
+                        team_id = team_identifier.get_team_for_player(player.player_id, player_img)
+                        display_color = team_identifier.get_display_color_for_player(player.player_id)
+                    
+                    # Store team info
+                    player.team_id = team_id
+                    
+                    # Add player to results
                     results['players'].append(player)
+                    
+                    # Draw player box with team color
+                    cv2.rectangle(frame_copy, (int(x1), int(y1)), (int(x2), int(y2)), display_color, 2)
+                    
+                    # Draw player ID
+                    cv2.putText(frame_copy, f"ID:{player.player_id}", (int(x1), int(y1)-5), 
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, display_color, 1)
+                    
+                    # Save player data to CSV if writer is provided
+                    if csv_writer:
+                        csv_writer.writerow([
+                            cycle,                    # detection cycle
+                            position,                 # position within cycle
+                            player.player_id,         # player ID
+                            player.x1,                # bounding box x1
+                            player.y1,                # bounding box y1
+                            player.x2,                # bounding box x2
+                            player.y2,                # bounding box y2
+                            player.x_2d,              # field x coordinate
+                            player.y_2d,              # field y coordinate
+                            player.confidence,        # detection confidence
+                            ball_x_2d,                # ball x coordinate
+                            ball_y_2d,                # ball y coordinate
+                            distance_to_ball,         # distance to ball
+                            team_id,                  # team ID
+                            timestamp                 # timestamp
+                        ])
                 
                 # Handle ball detection
-                elif (cls_id == 0) and score >= 0.4:
+                elif cls_id == 0 and score >= 0.4:
                     center_x = (x1 + x2) // 2
                     center_y = (y1 + y2) // 2
                     radius = min(x2 - x1, y2 - y1) // 2
@@ -1317,7 +1402,7 @@ def process_single_frame(detector, frame, cycle, position):
                     
                     # Create ball data
                     ball_data = BallCoordsObj(
-                        0, center_x, center_y, center_x, center_y, 
+                        0, ball_x_2d, ball_y_2d, center_x, center_y, 
                         radius, 0, position, 0, 0, False, False, "", False
                     )
                     results['ball'].data.append(ball_data)
@@ -1339,15 +1424,39 @@ def main() -> None:
     global thread_running, score_cntr_l, score_cntr_r, match_time, ai_settings
 
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Football Video Analysis')
+    parser = argparse.ArgumentParser(description='Football Video Analysis with Team Identification')
     parser.add_argument('--video', type=str, default='input1.mp4', help='Path to the input video file')
     parser.add_argument('--config_path', type=str, default='c:/Develop/Configuration', help='Path to configuration directory')
     parser.add_argument('--output_dir', type=str, default='output', help='Directory to save output files')
     parser.add_argument('--duration', type=int, default=90, help='Duration of analysis in minutes')
+    parser.add_argument('--csv', type=str, help='Path to output CSV file for player positions (defaults to output_dir/player_positions_timestamp.csv)')
+    parser.add_argument('--yolo_seg', type=str, default='yolov8m-seg.pt', help='Path to YOLOv8 segmentation model')
+    parser.add_argument('--yolo_pose', type=str, default='yolov8m-pose.pt', help='Path to YOLOv8 pose model')
+    parser.add_argument('--num_teams', type=int, default=2, help='Number of teams to identify (default: 2)')
     args = parser.parse_args()
     
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
+    
+    # Setup CSV for player positions
+    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if args.csv:
+        csv_path = args.csv
+    else:
+        csv_path = os.path.join(args.output_dir, f'player_positions_{timestamp_str}.csv')
+    
+    # Open CSV file for writing player positions
+    csv_file = open(csv_path, 'w', newline='')
+    csv_writer = csv.writer(csv_file)
+    
+    # Write CSV header - now includes team_id
+    csv_writer.writerow([
+        'cycle', 'position', 'player_id', 'x1', 'y1', 'x2', 'y2',
+        'field_x', 'field_y', 'confidence', 'ball_x', 'ball_y',
+        'distance_to_ball', 'team_id', 'timestamp'
+    ])
+    
+    print(f"Player positions will be saved to: {csv_path}")
     
     # Load AI settings
     config_path = args.config_path
@@ -1404,14 +1513,30 @@ def main() -> None:
     # Check if video file exists
     if not os.path.exists(args.video):
         print(f"Error: Video file not found: {args.video}")
+        csv_file.close()
         return
     
     print(f"Processing video: {args.video}")
+    
+    # Check if YOLO models exist (for team identification)
+    seg_model_path = args.yolo_seg
+    pose_model_path = args.yolo_pose
+    
+    # Import team identification module
+    try:
+        from team_identification import TeamIdentifier
+        team_identifier = TeamIdentifier(num_teams=args.num_teams)
+        print(f"Team identification initialized for {args.num_teams} teams")
+    except ImportError as e:
+        print(f"Warning: Team identification module could not be imported: {e}")
+        print("Players will not be identified by team")
+        team_identifier = None
     
     # Open the video file
     cap = cv2.VideoCapture(args.video)
     if not cap.isOpened():
         print(f"Error: Could not open video file: {args.video}")
+        csv_file.close()
         return
     
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -1448,97 +1573,152 @@ def main() -> None:
     current_stats.detection_cycle = 0
     current_stats.selected_cam = 0
     
+    # For team identification initialization
+    if team_identifier is not None:
+        print("Collecting initial player samples for team identification...")
+        player_samples = {}
+        initial_frames_needed = min(100, total_frames // 2)  # Use up to 100 frames or half the video
+        
+        # Collect player images from a subset of frames for team identification
+        temp_frame_count = 0
+        while temp_frame_count < initial_frames_needed and len(player_samples) < 20:  # Limit to 20 player samples
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            temp_frame_count += 1
+            if temp_frame_count % 10 != 0:  # Only process every 10th frame for efficiency
+                continue
+                
+            # Process frame to detect players
+            results = process_single_frame(detector, frame, 0, 0)
+            if results and 'players' in results and len(results['players']) > 0:
+                for player in results['players']:
+                    if player.player_id not in player_samples and player.x2 > player.x1 and player.y2 > player.y1:
+                        # Extract player image
+                        player_img = frame[max(0, int(player.y1)):min(frame.shape[0], int(player.y2)), 
+                                           max(0, int(player.x1)):min(frame.shape[1], int(player.x2))]
+                        if player_img.size > 0:
+                            player_samples[player.player_id] = (player_img, None)  # No keypoints yet
+        
+        # Reset video to beginning
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        
+        # Initialize team identification if we have enough samples
+        if len(player_samples) >= args.num_teams * 2:  # Need at least 2 players per team
+            print(f"Initializing team identification with {len(player_samples)} player samples")
+            team_identifier.initialize_teams(player_samples)
+        else:
+            print(f"Warning: Not enough player samples ({len(player_samples)}) for reliable team identification")
+    
     # Process frames until thread_running is set to 0 or duration is exceeded
-    while cap.isOpened() and thread_running.value == 1:
-        current_time = time.time()
-        elapsed_time = current_time - start_time
-
-        # Check if we've reached the specified duration
-        if elapsed_time >= ai_settings.duration_min * 60:
-            print(f"Reached specified duration of {ai_settings.duration_min} minutes. Exiting.")
-            break
-
-        # Process feedback from display thread (like score updates)
-        if not feedbackQueue.empty():
-            feedback_msg = feedbackQueue.get()
-            score_cntr_l = feedback_msg['score_cntr_l']
-            score_cntr_r = feedback_msg['score_cntr_r']
-            match_time = feedback_msg['match_time']
-
-        # Read the next frame
-        ret, frame = cap.read()
-        if not ret:
-            print("End of video reached")
-            break
-        
-        # Process at target FPS by skipping frames if needed
-        frame_count += 1
-        if (frame_count - 1) % skip_frames != 0:
-            continue
-        
-        # Calculate current cycle and position
-        position = (frame_count // skip_frames) % MAX_FPS
-        current_cycle = (frame_count // skip_frames) // MAX_FPS + 1
-        
-        # Update match time
-        minutes = current_cycle // 60
-        seconds = current_cycle % 60
-        match_time = f"{minutes:02}:{seconds:02}"
-        
-        # Process frame directly using our helper function
-        results = process_single_frame(detector, frame, current_cycle, position)
-        
-        if results:
-            # Create goal camera views from the frame
-            h, w = frame.shape[:2]
-            goal_l = frame[:, :w//3].copy()  # Left third of the frame
-            goal_r = frame[:, 2*w//3:].copy()  # Right third of the frame
-            
-            goal_l = cv2.resize(goal_l, (200, 200))
-            goal_r = cv2.resize(goal_r, (200, 200))
-            
-            # Update current stats
-            current_stats.detection_cycle = current_cycle
-            current_stats.total_frames += 1
-            current_stats.total_detections += 1
-            current_stats.ball_detected_frames += 1 if len(results['ball'].data) > 0 else 0
-            
-            # Send results to display queue
-            displayQueue.put({
-                'frame': results['frame'],
-                'goal_l': goal_l,
-                'goal_r': goal_r,
-                'stats': current_stats,
-                'ball': results['ball'],
-                'position': position,
-                'multiball': 0,
-                'players': results['players'],
-                'currentAction': currentAction  # Use global currentAction
-            })
-        
-        # Control processing rate
-        frame_time = time.time() - current_time
-        target_time = 1.0 / target_fps
-        if frame_time < target_time:
-            time.sleep(target_time - frame_time)
-
-    print("Video processing complete.")
-    
-    # Allow time for threads to finish
-    time.sleep(1)
-
-    # Release video capture
-    cap.release()
-    
-    # Terminate display thread
     try:
-        display_thread.terminate()
-    except:
-        pass
-    
-    print("Analysis completed")
-    print(f"Output saved to {ai_settings.video_out_folder}")
-    print(f"Final score: {score_cntr_l} - {score_cntr_r}")
+        while cap.isOpened() and thread_running.value == 1:
+            current_time = time.time()
+            elapsed_time = current_time - start_time
+
+            # Check if we've reached the specified duration
+            if elapsed_time >= ai_settings.duration_min * 60:
+                print(f"Reached specified duration of {ai_settings.duration_min} minutes. Exiting.")
+                break
+
+            # Process feedback from display thread (like score updates)
+            if not feedbackQueue.empty():
+                feedback_msg = feedbackQueue.get()
+                score_cntr_l = feedback_msg['score_cntr_l']
+                score_cntr_r = feedback_msg['score_cntr_r']
+                match_time = feedback_msg['match_time']
+
+            # Read the next frame
+            ret, frame = cap.read()
+            if not ret:
+                print("End of video reached")
+                break
+            
+            # Process at target FPS by skipping frames if needed
+            frame_count += 1
+            if (frame_count - 1) % skip_frames != 0:
+                continue
+            
+            # Calculate current cycle and position
+            position = (frame_count // skip_frames) % MAX_FPS
+            current_cycle = (frame_count // skip_frames) // MAX_FPS + 1
+            
+            # Update match time
+            minutes = current_cycle // 60
+            seconds = current_cycle % 60
+            match_time = f"{minutes:02}:{seconds:02}"
+            
+            # Process frame directly using our helper function with the CSV writer and team identifier
+            results = process_single_frame(detector, frame, current_cycle, position, csv_writer, team_identifier)
+            
+            if results:
+                # Create goal camera views from the frame
+                h, w = frame.shape[:2]
+                goal_l = frame[:, :w//3].copy()  # Left third of the frame
+                goal_r = frame[:, 2*w//3:].copy()  # Right third of the frame
+                
+                goal_l = cv2.resize(goal_l, (200, 200))
+                goal_r = cv2.resize(goal_r, (200, 200))
+                
+                # Update current stats
+                current_stats.detection_cycle = current_cycle
+                current_stats.total_frames += 1
+                current_stats.total_detections += 1
+                current_stats.ball_detected_frames += 1 if len(results['ball'].data) > 0 else 0
+                
+                # Send results to display queue
+                displayQueue.put({
+                    'frame': results['frame'],
+                    'goal_l': goal_l,
+                    'goal_r': goal_r,
+                    'stats': current_stats,
+                    'ball': results['ball'],
+                    'position': position,
+                    'multiball': 0,
+                    'players': results['players'],
+                    'currentAction': currentAction  # Use global currentAction
+                })
+            
+            # Control processing rate
+            frame_time = time.time() - current_time
+            target_time = 1.0 / target_fps
+            if frame_time < target_time:
+                time.sleep(target_time - frame_time)
+
+            # Print progress every 100 frames
+            if (frame_count // skip_frames) % 100 == 0:
+                progress = frame_count / total_frames * 100
+                elapsed = time.time() - start_time
+                remaining = (total_frames - frame_count) / (frame_count / elapsed) if frame_count > 0 else 0
+                print(f"Progress: {progress:.1f}% | ETA: {int(remaining/60):02d}:{int(remaining%60):02d} | Frame: {frame_count}/{total_frames}")
+
+    except KeyboardInterrupt:
+        print("Processing interrupted by user.")
+    except Exception as e:
+        print(f"Error during processing: {e}")
+    finally:
+        print("Video processing complete.")
+        
+        # Close the CSV file
+        csv_file.close()
+        print(f"Player positions saved to: {csv_path}")
+        
+        # Allow time for threads to finish
+        time.sleep(1)
+
+        # Release video capture
+        cap.release()
+        
+        # Terminate display thread
+        try:
+            display_thread.terminate()
+        except:
+            pass
+        
+        print("Analysis completed")
+        print(f"Output saved to {ai_settings.video_out_folder}")
+        print(f"Final score: {score_cntr_l} - {score_cntr_r}")
 
 if __name__ == '__main__':
     main()
