@@ -352,13 +352,19 @@ def process_detection_results(publisher, detector, cycle):
             detector_objs = cam.get_detector_collection(cycle)
             for det_obj in detector_objs:
                 if det_obj is not None:
-                    #ball_data = BallCoordsObj(cam.camera_id, det_obj.x_2d, det_obj.y_2d, det_obj.position)
-                    #ball_coords.data.append(ball_data)    
+                    # if det_obj.frame is not None:
+                    #     height, width = det_obj.frame.shape[:2]
+                    
                     if det_obj.frame.shape[1] > 1000:
                         width, height = 2300, 896
                     else:
                         width, height = 960, 576
                     frame = cv2.resize(det_obj.frame, (width, height))
+                    #ball_data = BallCoordsObj(cam.camera_id, det_obj.x_2d, det_obj.y_2d, det_obj.position)
+                    #ball_coords.data.append(ball_data)                                        
+                    # frame = det_obj.frame.copy()
+                    
+                    #frame = cv2.resize(frame, (640, 384), interpolation=cv2.INTER_AREA)
 
                     frame_goal_l = goal_l_cam.get_goal_frame(cycle, det_obj.position)
                     frame_goal_r = goal_r_cam.get_goal_frame(cycle, det_obj.position)
@@ -385,9 +391,9 @@ def process_detection_results(publisher, detector, cycle):
                     ball_point_x=-1
                     ball_point_y = -1
                     ball_point_x_2d=-1
-                    ball_point_y_2d = -1                    
+                    ball_point_y_2d = -1
                     ball_radius = 0
-                    if (det_obj.x1>0):
+                    if (det_obj.x1 > 0):
                         #cv2.rectangle(frame, (int(det_obj.x1), int(det_obj.y1)), (int(det_obj.x2), int(det_obj.y2)), (0,0,255), 2) 
                         center_x, center_y = (det_obj.x1 + det_obj.x2) // 2, (det_obj.y1 + det_obj.y2) // 2
                         radius = min(det_obj.x2 - det_obj.x1, det_obj.y2 - det_obj.y1) // 2
@@ -413,7 +419,7 @@ def process_detection_results(publisher, detector, cycle):
                         closest_distance=None
                         closet_player_width = None
                         distance=-1
-                        player_collection =players_pb2.FootPlayerCollection()
+                        player_collection = players_pb2.FootPlayerCollection()
                         player_collection.cycle = cycle
                         player_collection.position = det_obj.position
                         player_collection.img = frame.tobytes()
@@ -466,7 +472,8 @@ def process_detection_results(publisher, detector, cycle):
                                         closest_player = player
                                         closet_player_width = player.x2 - player.x1
 
-                                cv2.rectangle(frame, (int(player.x1), int(player.y1)), (int(player.x2), int(player.y2)), (255,0,0), 2)
+                                #Draw player box
+                                cv2.rectangle(frame, (int(player.x1), int(player.y1)), (int(player.x2), int(player.y2)), (0,255,0), 2)
                                 player.cam_id = cam.camera_id
                                 #player.x_2d, player.y_2d = cam.convert_player_to_2d(int((player.x1+player.x2)/2), int(player.y2)-15)
                                 player.ball_distance = distance
@@ -1237,7 +1244,7 @@ def display_frames(thread_running, displayQueue, feedbackQueue):
                             last_ball_x_real = ball.x
                             last_ball_y_real = ball.y
                             
-                            cv2.circle(combined_frame, (xx, yy), ball_rad, ccolor, -1)
+                            # cv2.circle(combined_frame, (xx, yy), ball_rad, ccolor, -1)
                             printed=True
                             if ball.kicked==True:
                                  ballkicked_cntr=3
@@ -1380,11 +1387,13 @@ def display_frames(thread_running, displayQueue, feedbackQueue):
                             #score_cntr_l+=1
                             if goal_hold_back_l==-1:
                                 goal_hold_back_l = goal_holdback_frames   
-                    now =time.perf_counter()*1000
+                    now = time.perf_counter()*1000
                     #time_diff_ms = now - start
                     #print("Process time:", time_diff_ms)                    
                     goal_l_res = cv2.resize(goal_l_frame, (200, 200), interpolation=cv2.INTER_LINEAR)
-                    combined_frame[40:240, 10:210] = goal_l_res
+                    combined_frame[10:270, 10:260] = goal_l_res
+                    if goal_check_frame_l is not None:
+                        combined_frame[270:270+goal_check_l_h, 10:10+200] = goal_check_frame_l[0:goal_check_l_h, 0:200]
                 if goal_r is not None:
                     if take_ref_img_r==True:
                         take_ref_img_r=False
