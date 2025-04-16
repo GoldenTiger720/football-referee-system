@@ -94,7 +94,7 @@ def get_players_boxes(boxes, classes, scores, frame, conf_threshold=0.6, visuali
     
     for i, (box, cls, score) in enumerate(zip(boxes, classes, scores)):
         # Use class 1 for players (based on your updated reference code)
-        if cls == 2 and score >= conf_threshold:
+        if cls == 1 and score >= conf_threshold:
             x1, y1, x2, y2 = box
             # Make sure coordinates are within frame boundaries
             x1, y1 = max(0, x1), max(0, y1)
@@ -461,7 +461,6 @@ def annotate_video(video_path, engine_id="1280", gpu_id=0):
     
     # Open video
     cap = cv2.VideoCapture(video_path)
-    
     # Set output video dimensions
     height = 896
     width = 2300
@@ -519,8 +518,9 @@ def annotate_video(video_path, engine_id="1280", gpu_id=0):
         # Post-processing
         boxes, scores, classes = process_detections(output, annotated_frame.shape)
         
+        
         # Get player images and boxes with higher confidence threshold
-        players_imgs, players_boxes = get_players_boxes(boxes, classes, scores, annotated_frame, player_conf_threshold, visualize=True)
+        players_imgs, players_boxes = get_players_boxes(boxes, classes, scores, annotated_frame, player_conf_threshold, visualize=False)
         
         # Get kit colors for detected players
         if len(players_imgs) > 0:
@@ -556,7 +556,7 @@ def annotate_video(video_path, engine_id="1280", gpu_id=0):
                 display_label = None
                 
                 # Handle player detection (class 1)
-                if cls == 2 and score >= player_conf_threshold:
+                if cls == 1 and score >= player_conf_threshold:
                     if kits_clf is not None and left_team_label is not None:
                         # Get kit color for this player
                         player_img = annotated_frame[y1:y2, x1:x2]
@@ -583,7 +583,7 @@ def annotate_video(video_path, engine_id="1280", gpu_id=0):
                     label_key = str(label_key)
                 
                 # Handle ball detection (class 0)
-                elif cls == 1 and score >= ball_conf_threshold:
+                elif cls == 0 and score >= ball_conf_threshold:
                     display_label = label_names.get(2, "Ball")
                     label_key = "2"
                 
