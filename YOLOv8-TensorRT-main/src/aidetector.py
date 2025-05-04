@@ -56,6 +56,18 @@ class AIDetector:
         self.last_left_goalkeeper=None
         self.broadcast_camera = -1
 
+        self.kits_clf = None
+        self.left_team_label = None
+        self.grass_hsv = None
+        self.team_colors = None
+        self.current_frame_idx = 0
+        self.accumulated_kit_colors = []
+        self.labels_name = {
+            0: "Player-L",  # Left team player
+            1: "Player-R",  # Right team player
+            2: "Ball"       # Ball
+        }
+
         for m_id in range(self.paralell_models ):
             self.W_1280, self.H_1280 = create_engine(0, self.engines_1280, "1280")
 
@@ -67,22 +79,22 @@ class AIDetector:
         for camera in self.cameras:
             detector_objs = camera.get_detector_collection(self.detector_cycle)
             for obj in detector_objs:
-                if obj is not None and obj.skip == False and obj.processed ==False:
+                if obj is not None and obj.skip == False and obj.processed == False:
                     self.outstanding_detections += 1
         return self.outstanding_detections
     
     def process(self, current_detector_cycle):
-        if (current_detector_cycle<=self.detector_cycle and self.current_stage==1):
+        if (current_detector_cycle <= self.detector_cycle and self.current_stage == 1):
             return
         self.process_results_non_blocking()
         if self.futures:
             return
 
         self.get_number_of_outstanding_detections()
-        if self.outstanding_detections>0:
+        if self.outstanding_detections > 0:
             return
 
-        if self.current_stage==1:
+        if self.current_stage == 1:
             self.stage_start_time = time.monotonic_ns()
             self.run_stage_1(number_of_frames=self.ai_settings.detection_first_stage_frames)
             self.current_stage = 2
@@ -242,15 +254,14 @@ class AIDetector:
             detector_objs = cam.get_detector_collection(self.detector_cycle)
             for obj in detector_objs:
                 if obj is not None:
-                    frames+=1
-                    
+                    frames += 1
                     if obj.ball > 0:
                         ball_on += 1
                         framepos.append(obj.position)
                     if obj.processed == True:
-                        processed_cntr+=1
+                        processed_cntr += 1
         if self.best_camera == -1:
-            if self.last_best_camera!=-1:
+            if self.last_best_camera != -1:
                 self.best_camera = self.last_best_camera
             else:
                 self.best_camera = self.cameras[0].camera_id
@@ -258,12 +269,11 @@ class AIDetector:
             if cam.camera_id==self.best_camera:
                 detector_objs = cam.get_detector_collection(self.detector_cycle)
                 self.fill_gaps(cam, self.detector_cycle, self.second_best_camera)
-                
                 self.last_best_camera_obj = cam
                 
-                det_frames=[]
+                det_frames = []
                 for det in detector_objs:
-                    if det is not None and det.processed==True:
+                    if det is not None and det.processed == True:
                         det_frames.append(det.position)
                 break
         
@@ -522,7 +532,7 @@ class AIDetector:
         for camera in self.cameras:
             detector_objs = camera.get_non_none_detector_collection(self.detector_cycle)
             total_frm += len(detector_objs)
-        if (total_frm<12):
+        if (total_frm < 12):
             self.current_stage = 99
             return
 
@@ -550,54 +560,51 @@ class AIDetector:
                             except:
                                 print(f'ERROR - FAILED TO get frame from position {frame_pos} on camera {camera.camera_id}')
 
-        if self.goal_l_reference_taken==False:
+        if self.goal_l_reference_taken == False:
             for camera in self.cameras:
-                if camera.camera_id==11:
-                    l_cntr=0
+                if camera.camera_id == 11:
+                    l_cntr = 0
+                    detector_objs = camera.get_detector_collection(self.detector_cycle, detection_type = DetectionType.GOAL)
+                    for det_obj in detector_objs:
+                        if (det_obj is not None and det_obj.frame is not None):
+                            det_obj.skip=False
+                            l_cntr += 1
+                            if l_cntr >= 6:
+                                break
+                if camera.camera_id == 10:
+                    r_cntr = 0
                     detector_objs = camera.get_detector_collection(self.detector_cycle, detection_type=DetectionType.GOAL)
                     for det_obj in detector_objs:
                         if (det_obj is not None and det_obj.frame is not None):
                             det_obj.skip=False
-                            l_cntr+=1
-                            if l_cntr>=6:
+                            r_cntr += 1
+                            if r_cntr >= 6:
                                 break
-                if camera.camera_id==10:
-                    r_cntr=0
-                    detector_objs = camera.get_detector_collection(self.detector_cycle, detection_type=DetectionType.GOAL)
-                    for det_obj in detector_objs:
-                        if (det_obj is not None and det_obj.frame is not None):
-                            det_obj.skip=False
-                            r_cntr+=1
-                            if r_cntr>=6:
-                                break
-
         self.run_detection()
 
     def run_detection(self):
-        engine_position=0
+        engine_position = 0
         start = time.monotonic_ns()
         for camera in self.cameras:
             if (camera.capture_only_device == True):
                 continue
             detector_objs = camera.get_detector_collection(self.detector_cycle)
             for det_obj in detector_objs:
-                if det_obj is not None and det_obj.skip==False and det_obj.processed==False and det_obj.in_progress==False:
-                    det_obj.in_progress=True
+                if det_obj is not None and det_obj.skip == False and det_obj.processed == False and det_obj.in_progress == False:
+                    det_obj.in_progress = True
                     engine = self.engines_960
                     engine_w = self.W_960
                     engine_h = self.H_960
-                    if camera.frame_w==1280 or camera.frame_w==2300:
+                    if camera.frame_w == 1280 or camera.frame_w == 2300:
                         engine = self.engines_1280
                         engine_w = self.W_1280
                         engine_h = self.H_1280
-                    self.futures.append(self.executor.submit(self.process_frame, camera, self.detector_cycle, det_obj, engine[engine_position], 
-                                                            engine_w, engine_h))
-                    engine_position+=1
-                    if (engine_position>=self.paralell_models):
-                        engine_position=0
-
+                    self.futures.append(self.executor.submit(self.process_frame, camera, self.detector_cycle, det_obj, engine[engine_position], engine_w, engine_h))
+                    engine_position += 1
+                    if (engine_position >= self.paralell_models):
+                        engine_position = 0
         elapsed = (time.monotonic_ns() - start) /1000 /1000
-        if (elapsed>2):
+        if (elapsed > 2):
             print("run_detection process time:", elapsed)
 
     def process_results_non_blocking(self):
@@ -750,6 +757,38 @@ class AIDetector:
         else:
             return mean_saturation, mean_value, 0
     
+    def get_grass_color(self,img):
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        lower_green = np.array([30, 40, 40])
+        upper_green = np.array([80, 255, 255])
+        mask = cv2.inRange(hsv, lower_green, upper_green)
+        masked_img = cv2.bitwise_and(img, img, mask=mask)
+        grass_color = cv2.mean(img, mask=mask)
+        return grass_color[:3]
+    
+    def process_detections(self, output, orig_shape, W, H):
+        num_dets, bboxes, scores, labels = output
+        num_dets = int(num_dets[0])
+        
+        # Extract valid detections
+        bboxes = bboxes[0, :num_dets]
+        scores = scores[0, :num_dets]
+        labels = labels[0, :num_dets]
+        
+        # Convert boxes to [x1, y1, x2, y2] format and scale to original image dimensions
+        orig_h, orig_w = orig_shape[:2]
+        boxes = []
+        for bbox in bboxes:
+            x1, y1, x2, y2 = bbox
+            # Scale coordinates to original frame dimensions
+            x1 = int(x1 * orig_w / W)
+            y1 = int(y1 * orig_h / H)
+            x2 = int(x2 * orig_w / W)
+            y2 = int(y2 * orig_h / H)
+            boxes.append([x1, y1, x2, y2])
+        
+        return np.array(boxes), scores.cpu().numpy(), labels.cpu().numpy()
+    
     def process_frame(self, camera, cycle_id, det_obj, Engine, W, H):
         width, height = 2300, 896
 
@@ -768,10 +807,10 @@ class AIDetector:
         data = Engine(det_obj.tensor)  # Process the batch through the engine
 
         bboxes, scores, labels = det_postprocess(data)
+        highest_score_ball = -1
         if bboxes.numel() == 0:
             pass
         else:
-            highest_score_ball=-1
             for (bbox, score, label) in zip(bboxes, scores, labels):
                 bbox = bbox.round().int().tolist()
                 cls_id = int(label)
@@ -781,47 +820,46 @@ class AIDetector:
                 x2 = bbox[2:][0]
                 y2 = bbox[2:][1]       
                 if cls_id == CLASSID_PLAYER and score >= self.ai_settings.people_confidence: 
-                    if (camera.camera_id==2 or camera.camera_id==3) and y2 < 76:
+                    if (camera.camera_id == 2 or camera.camera_id == 3) and y2 < 76:
                         pass
                     elif y2 - y1 > 90: 
                         det_obj.people += 1
                         player = Player()
-                        player.x1=int(x1)
-                        player.x2=int(x2)
-                        player.y1=int(y1)
-                        player.y2=int(y2)
-                        player.confidence=round(float(score),2)
+                        player.x1 = int(x1)
+                        player.x2 = int(x2)
+                        player.y1 = int(y1)
+                        player.y2 = int(y2)
+                        player.confidence = round(float(score), 2)
                         det_obj.players.append(player)
-                if (cls_id == CLASSID_BALL) and score >= self.ai_settings.ball_confidence:#0.5                    
-                    
+                if (cls_id == CLASSID_BALL) and score >= self.ai_settings.ball_confidence:
                     if score < highest_score_ball:
-                        det_obj.ball +=1
+                        det_obj.ball += 1
                     else:
-                        MIN_BALL_SIZE=self.ai_settings.min_ball_size#12
-                        rad = min(abs(int(x2)-int(x1)), abs(int(y2)-int(y1)))
+                        MIN_BALL_SIZE = self.ai_settings.min_ball_size   #12
+                        rad = min(abs(int(x2) - int(x1)), abs(int(y2) - int(y1)))
 
                         if (rad >= MIN_BALL_SIZE):
-                            if self.ai_settings.ball_do_deep_check==True:
+                            if self.ai_settings.ball_do_deep_check == True:
                                 det_obj.mean_saturation, det_obj.mean_value, det_obj.white_gray = self.deep_check2(cycle_id, det_obj.frame, x1, y1, x2, y2)
-                                if (det_obj.mean_saturation>self.ai_settings.ball_mean_saturation or det_obj.mean_value<self.ai_settings.ball_mean_value):
+                                if (det_obj.mean_saturation > self.ai_settings.ball_mean_saturation or det_obj.mean_value < self.ai_settings.ball_mean_value):
                                     continue                        
                             highest_score_ball = score
                             det_obj.ball +=1
-                            det_obj.x1=int(x1)
-                            det_obj.x2=int(x2)
-                            det_obj.y1=int(y1)
-                            det_obj.y2=int(y2)
+                            det_obj.x1 = int(x1)
+                            det_obj.x2 = int(x2)
+                            det_obj.y1 = int(y1)
+                            det_obj.y2 = int(y2)
                             det_obj.ball_radius = int(rad)
-                            det_obj.confidence=round(float(score),2)
+                            det_obj.confidence = round(float(score),2)
                             camera.convert_to_2d(det_obj)
 
                         else:
-                            det_obj.x1=-1
-                            det_obj.x2=-1
-                            det_obj.y1=-1
-                            det_obj.y2=-1
-                            det_obj.x_2d=-1
-                            det_obj.y_2d=-1
+                            det_obj.x1 = -1
+                            det_obj.x2 = -1
+                            det_obj.y1 = -1
+                            det_obj.y2 = -1
+                            det_obj.x_2d = -1
+                            det_obj.y_2d = -1
                             det_obj.ball_radius = -1
-                            det_obj.confidence=-1
+                            det_obj.confidence = -1
         return camera.camera_id, cycle_id, det_obj

@@ -9,17 +9,6 @@ import time
 from src.gpu import create_device, create_engine, create_tensor
 
 def get_grass_color(img, visualize=False):
-    """
-    Finds the color of the grass in the background of the image and optionally visualizes the detection.
-
-    Args:
-        img: np.array object of shape (WxHx3) that represents the BGR value of the frame pixels.
-        visualize: Boolean flag to enable visualization of the grass detection.
-
-    Returns:
-        grass_color
-            Tuple of the BGR value of the grass color in the image
-    """
     # Convert image to HSV color space
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
@@ -66,32 +55,8 @@ def get_grass_color(img, visualize=False):
     return grass_color[:3]
 
 def get_players_boxes(boxes, classes, scores, frame, conf_threshold=0.6, visualize=False):
-    """
-    Finds the images of the players in the frame and their bounding boxes.
-
-    Args:
-        boxes: Array of bounding boxes [x1, y1, x2, y2]
-        classes: Array of class ids
-        scores: Array of confidence scores
-        frame: Original video frame
-        conf_threshold: Confidence threshold for player detection
-        visualize: Boolean flag to enable visualization
-        
-    Returns:
-        players_imgs
-            List of np.array objects that contain the BGR values of the cropped
-            parts of the image that contains players.
-        players_boxes
-            List of bounding boxes for players
-    """
     players_imgs = []
     players_boxes = []
-    
-    # Create visualization canvas if needed
-    if visualize:
-        viz_img = frame.copy()
-        detection_info = []
-    
     for i, (box, cls, score) in enumerate(zip(boxes, classes, scores)):
         # Use class 1 for players (based on your updated reference code)
         if cls == 1 and score >= conf_threshold:
@@ -106,81 +71,16 @@ def get_players_boxes(boxes, classes, scores, frame, conf_threshold=0.6, visuali
                 if player_img.size > 0:  # Make sure we have a valid image
                     players_imgs.append(player_img)
                     players_boxes.append(box)
-                    
-                    # Add to visualization
-                    if visualize:
-                        # Draw bounding box
-                        cv2.rectangle(viz_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                        
-                        # Add label with score
-                        label = f"Player {i+1}: {score:.2f}"
-                        cv2.putText(viz_img, label, (x1, y1-10), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                        
-                        # Save information for player crops display
-                        detection_info.append((player_img, i+1, score))
-    
-    # Display visualization with player crops
-    if visualize and len(players_imgs) > 0:
-        # Create a separate window for player crops
-        panel_height = 200
-        panel_width = 1200
-        panel = np.ones((panel_height, panel_width, 3), dtype=np.uint8) * 50  # Dark gray background
-        
-        # Display up to 6 player crops
-        max_display = min(6, len(detection_info))
-        crop_width = panel_width // max_display
-        
-        for i in range(max_display):
-            player_crop, idx, score = detection_info[i]
-            
-            # Resize crop to fit panel
-            crop_height = min(150, panel_height - 40)
-            crop_w = int(player_crop.shape[1] * (crop_height / player_crop.shape[0]))
-            crop_w = min(crop_w, crop_width - 20)
-            
-            if crop_w > 0 and crop_height > 0:
-                resized_crop = cv2.resize(player_crop, (crop_w, crop_height))
-                
-                # Calculate position
-                x_offset = i * crop_width + (crop_width - crop_w) // 2
-                
-                # Place crop in panel
-                y_offset = 10
-                h, w = resized_crop.shape[:2]
-                panel[y_offset:y_offset+h, x_offset:x_offset+w] = resized_crop
-                
-                # Add info text
-                cv2.putText(panel, f"Player {idx}: {score:.2f}", 
-                           (x_offset, y_offset+h+20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
-        # Display both windows separately instead of trying to combine them
-        cv2.imshow("Player Detections Frame", cv2.resize(viz_img, (1200, 600)))
-        cv2.imshow("Player Crops", panel)
-        cv2.waitKey(100)  # Display for 100ms
-    
     return players_imgs, players_boxes
 
 def get_ball_box(boxes, classes, scores, conf_threshold=0.5):
-    """
-    Finds the ball in the frame.
-
-    Args:
-        boxes: Array of bounding boxes [x1, y1, x2, y2]
-        classes: Array of class ids
-        scores: Array of confidence scores
-        conf_threshold: Confidence threshold for ball detection
-        
-    Returns:
-        ball_box
-            Bounding box of the ball, or None if no ball is detected
-    """
     ball_boxes = []
     ball_scores = []
     
     for i, (box, cls, score) in enumerate(zip(boxes, classes, scores)):
         # Assuming class 0 for the ball (adjust as needed)
         if cls == 0 and score >= conf_threshold:
+            x1, y1, x2, y2 = box
             ball_boxes.append(box)
             ball_scores.append(score)
     
@@ -192,22 +92,6 @@ def get_ball_box(boxes, classes, scores, conf_threshold=0.5):
     return None
 
 def get_kits_colors(players, grass_hsv=None, frame=None, visualize=False):
-    """
-    Finds the kit colors of all the players in the current frame with optional visualization.
-
-    Args:
-        players: List of np.array objects that contain the BGR values of the image
-        portions that contain players.
-        grass_hsv: tuple that contain the HSV color value of the grass color of
-        the image background.
-        frame: Original video frame
-        visualize: Boolean flag to enable visualization of kit color extraction
-
-    Returns:
-        kits_colors
-            List of np arrays that contain the BGR values of the kits color of all
-            the players in the current frame
-    """
     kits_colors = []
     if grass_hsv is None and frame is not None:
         grass_color = get_grass_color(frame)
@@ -319,21 +203,6 @@ def get_kits_classifier(kits_colors):
     return kits_kmeans
 
 def classify_kits(kits_classifier, kits_colors):
-    """
-    Classifies the player into one of the two teams according to the player's kit
-    color
-
-    Args:
-        kits_classifier: sklearn.cluster.KMeans object that can classify the
-        players kits into 2 teams according to their color.
-        kits_colors: List of np.array objects that contain the BGR values of
-        the colors of the kits of the players found in the current frame.
-
-    Returns:
-        team
-            np.array object containing a single integer that carries the player's
-            team number (0 or 1)
-    """
     if kits_classifier is None:
         return np.zeros(len(kits_colors))
         
@@ -341,20 +210,6 @@ def classify_kits(kits_classifier, kits_colors):
     return team
 
 def get_left_team_label(players_boxes, kits_colors, kits_clf):
-    """
-    Finds the label of the team that is on the left of the screen
-
-    Args:
-        players_boxes: List of bounding boxes for players
-        kits_colors: List of np.array objects that contain the BGR values of
-        the colors of the kits of the players found in the current frame.
-        kits_clf: sklearn.cluster.KMeans object that can classify the players kits
-        into 2 teams according to their color.
-    Returns:
-        left_team_label
-            Int that holds the number of the team that's on the left of the image
-            either (0 or 1)
-    """
     if kits_clf is None or len(players_boxes) < 2 or len(kits_colors) < 2:
         return 0
         
@@ -388,16 +243,6 @@ def get_left_team_label(players_boxes, kits_colors, kits_clf):
     return left_team_label
 
 def resize_frame(frame, scale=0.3):
-    """
-    Resize the video frame by a given scale.
-    
-    Args:
-    - frame: The video frame to resize.
-    - scale: The scale factor (default is 0.3).
-    
-    Returns:
-    - The resized frame.
-    """
     width = int(frame.shape[1] * scale)
     height = int(frame.shape[0] * scale)
     dimensions = (800, 600)
@@ -405,30 +250,11 @@ def resize_frame(frame, scale=0.3):
     return cv2.resize(frame, dimensions, interpolation=cv2.INTER_AREA)
 
 def process_detections(output, orig_shape):
-    """
-    Process the raw detection outputs from the TensorRT model
-    
-    Args:
-        output: Raw outputs from TensorRT model (num_dets, bboxes, scores, labels)
-        orig_shape: Original shape of the frame
-        
-    Returns:
-        boxes: Array of bounding boxes [x1, y1, x2, y2]
-        scores: Array of confidence scores
-        classes: Array of class ids
-    """
-    # Unpack the output
     num_dets, bboxes, scores, labels = output
-    
-    # Get the number of detections in the first batch
     num_dets = int(num_dets[0])
-    
-    # Extract valid detections
     bboxes = bboxes[0, :num_dets]
     scores = scores[0, :num_dets]
     labels = labels[0, :num_dets]
-    
-    # Convert boxes to [x1, y1, x2, y2] format and scale to original image dimensions
     orig_h, orig_w = orig_shape[:2]
     boxes = []
     for bbox in bboxes:
@@ -443,15 +269,6 @@ def process_detections(output, orig_shape):
     return np.array(boxes), scores.cpu().numpy(), labels.cpu().numpy()
 
 def annotate_video(video_path, engine_id="1280", gpu_id=0):
-    """
-    Loads the input video and runs the object detection algorithm on its frames,
-    finally it annotates the frame with the appropriate labels
-
-    Args:
-        video_path: String that holds the path of the input video
-        engine_id: ID of the engine to use (default "1280")
-        gpu_id: ID of the GPU to use (default 0)
-    """
     # Initialize GPU device and load engine
     device = create_device(gpu_id)
     engines = []
@@ -528,10 +345,7 @@ def annotate_video(video_path, engine_id="1280", gpu_id=0):
             
             # Wait until we have enough players for reliable team classification
             if len(frame_kits_colors) >= 4:
-                # Accumulate kit colors for more stable team classification
                 accumulated_kit_colors.extend(frame_kits_colors)
-                
-                # Keep the accumulated kit colors list from growing too large
                 if len(accumulated_kit_colors) > 100:
                     accumulated_kit_colors = accumulated_kit_colors[-100:]
                 

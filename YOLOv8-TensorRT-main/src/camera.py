@@ -108,7 +108,7 @@ class DetectorStats:
         self.overall_detection_rate = 0
 
 class Frame:
-    def __init__(self, frame, camera_id, frame_id, timestamp, slave = False):#position is the position within the second 0 - 24
+    def __init__(self, frame, camera_id, frame_id, timestamp, slave = False):
         self.frame_id = frame_id
         self.timestamp = timestamp
         self.camera_id = camera_id
@@ -128,7 +128,7 @@ class PlayerCollection:
     def get_collection(self, key):
         players =  self.data.get(key, [])  # Return the collection if key exists, otherwise return an empty list
         
-        if (len(players)>0):
+        if (len(players) > 0):
             self.last_good_collection = players
             self.last_good_collection_ttl = 3
         else:
@@ -196,7 +196,7 @@ class Detector:
         self.fake = False
 
 class Camera:
-    def __init__(self, field_id, id, path, thread_running,frame_start, max_fps, feed_fps, description, detection_type=DetectionType.NORMAL , capture_only_device = False, slaves=[]):
+    def __init__(self, field_id, id, path, thread_running,frame_start, max_fps, feed_fps, description, detection_type = DetectionType.NORMAL , capture_only_device = False, slaves=[]):
         self.next_frame_please = mp.Value('i', 7)
         self.output_queue =  mp.Queue()
         self.slaves = slaves
@@ -219,28 +219,23 @@ class Camera:
         self.device = None
         self.W = 0
         self.H = 0
-        self.frame_w=0
-        self.frame_h=0
-        self.callback_cntr=0
+        self.frame_w = 0
+        self.frame_h = 0
+        self.callback_cntr = 0
         self.transformation_matrix = None
         self.reference_frame_saved = False
         self.current_live_cycle = -1
 
-        self.camera_mapper=CameraMapper(f'mapping_field{field_id}_cam{self.camera_id}.json')
+        self.camera_mapper = CameraMapper(f'mapping_field{field_id}_cam{self.camera_id}.json')
         sub = ProtoSubscriber(f'video_topic_{self.camera_id}'
                             , frame_pb2.FrameData)
-
-        # Set the Callback
         sub.set_callback(self.callback)
-
-        if path!="":
+        if path != "":
             pass
         else:
             print(f'*** WARNING: CAM {self.camera_id} is a Slave stream only! Used for storage only.')
-
         if capture_only_device:
             print(f'*** WARNING: CAM {self.camera_id} is a capture only device providing frames for slaves!')
-        
         self.detector_cycle_current = 1
 
     def set_executor_cycle(self, cycle):
@@ -252,7 +247,7 @@ class Camera:
                 self.current_live_cycle = frame_proto_msg.cycle
             frame_array = np.frombuffer(frame_proto_msg.frame, dtype=np.uint8)
             frame = frame_array.reshape((frame_proto_msg.height, frame_proto_msg.width, channels))
-            if (self.camera_id==10 or self.camera_id == 11):
+            if (self.camera_id == 10 or self.camera_id == 11):
                 frame = self.enhance_contrast_and_whiten(frame).copy()
                 if frame is None:
                     return
@@ -260,11 +255,10 @@ class Camera:
             self.frame_h = frame_proto_msg.height
             frm = Frame(frame, frame_proto_msg.camera_id, frame_proto_msg.frame_id, frame_proto_msg.unix_timestamp)
             self.register_frame(frm, frame_proto_msg.cycle, frame_proto_msg.position)
-            self.callback_cntr+=1
-            if self.reference_frame_saved==False:
-                self.reference_frame_saved=True
+            self.callback_cntr += 1
+            if self.reference_frame_saved == False:
+                self.reference_frame_saved = True
                 cv2.imwrite(f'XXX{self.camera_id}_{self.callback_cntr}.png', frame)
-
 
     def apply_white_balance(self,image):
         # Convert the image to LAB color space
@@ -477,7 +471,7 @@ class Camera:
         return last, last_det
     
     def get_detector_collection(self, detector_cycle, detection_type = DetectionType.NORMAL):
-        if self.detection_type!= detection_type:
+        if self.detection_type != detection_type:
             return []
         return self.detector_objects[detector_cycle]
     
@@ -490,7 +484,6 @@ class Camera:
         return frame
 
     def capture(self, frame_start):
-        print("TR2:", self.thread_running.value)
         device = torch.device("cuda:0")
         ecal_core.initialize([], f'CAM{self.camera_id} Publisher')
         pubs=[]
@@ -550,16 +543,16 @@ class Camera:
                     total_frames_captures+=1
 
             #-------- skip frames if needed ------
-            fps_step_cntr+=1
+            fps_step_cntr += 1
             curr_fps_nbr = round(fps_step_cntr*fps_step)
             if (curr_fps_nbr == last_step_nbr):
                 success, frame = cap.read()
-                total_frames_captures+=1
-                fps_step_cntr+=1
+                total_frames_captures += 1
+                fps_step_cntr += 1
             last_step_nbr = curr_fps_nbr
             self.frame_id = int((time.perf_counter()*1000 - frame_start.value)/(frame_time))
             if success:
-                err_cntr=0
+                err_cntr = 0
                 timestamp = int(time.perf_counter() * 1000)
                 if (self.camera_id==4):
                     res_start = time.perf_counter()
@@ -567,8 +560,8 @@ class Camera:
                     cropped_frame = frame[468:1368, 244:2544]
                     width = 1200
                     height = 384
-                    fwidth=640
-                    fheight=384
+                    fwidth = 640
+                    fheight = 384
                     frame = cv2.resize(cropped_frame, (width, height), interpolation=cv2.INTER_LINEAR)
                     frame = self.enhance_frame(frame)
                     width_half, height_half = int(width/2), int(height/2)
@@ -584,7 +577,6 @@ class Camera:
                     pubs[1].send(create_protobuf(self.frame_id, self.slaves[0], slices[0], timestamp, fwidth, fheight))
                     pubs[2].send(create_protobuf(self.frame_id, self.slaves[1], slices[1], timestamp, fwidth, fheight))
                     pubs[3].send(create_protobuf(self.frame_id, self.slaves[2], both_goals, timestamp, goal_size * 2, goal_size))
-
                     res_elapsed = (time.perf_counter() - res_start) * 1000
                 else:
                     frame = cv2.resize(frame, (640, 384), interpolation=cv2.INTER_LINEAR)
