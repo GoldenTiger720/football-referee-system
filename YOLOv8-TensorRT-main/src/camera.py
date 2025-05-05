@@ -440,12 +440,11 @@ class Camera:
                 self.detector_objects[cycle][cntr].processed=True
                 self.detector_objects[cycle][cntr].fake =True
                 self.detector_objects[cycle][cntr].position = cntr
-            cntr+=1
+            cntr += 1
         try:
             first = self.detector_objects[cycle][0]
             if first.x1==-1:
                 last, last_width_det=self.get_last_value(cycle-1)
-                
                 if last_width_det is not None:
                     if (last_width_det.position>self.feed_fps-5):
                         self.detector_objects[cycle][0]=Detector(self.camera_id,last.frame,0,0)
