@@ -18,6 +18,12 @@ from src.playeraction import *
 from src.player_tracker import *
 import proto_messages.players_pb2 as players_pb2
 
+TEAM_COLORS = {
+    0: (255, 0, 0),    # Blue team (BGR format in OpenCV)
+    1: (0, 0, 255),    # Red team (BGR format in OpenCV)
+    -1: (0, 255, 0)    # Unknown/Referee (Green)
+}
+
 def get_performance_cores():
     return range(8)
 
@@ -134,21 +140,21 @@ def process_detection_results(publisher, detector, cycle):
                             kick_detected = False #reset previous kick as direction chnaged
                         
                         last_ball_direction = det_obj.ball_direction
-                    if moving_average_acceleration < 2 and moving_average_speed < 2:
-                        kick_detected = False
+                    if moving_average_acceleration<2 and moving_average_speed<2:
+                        kick_detected=False
                     
                     if (moving_average_acceleration>3 and kick_detected==False) or (moving_average_acceleration>6 and (moving_average_acceleration-prev_acceleration)>5 and moving_average_speed<26):
-                            kick_detected = True
+                            kick_detected=True
                             kicked = True
                             currentAction.start_action(det_obj.x_2d, det_obj.y_2d, match_time, cycle, det_obj.position)
                     currentAction.add_speed(moving_average_speed)
                     currentAction.add_acceleration(moving_average_acceleration)
                     currentAction.add_score(score_cntr_l, score_cntr_r)
                     k_str='Off'
-                    if kick_detected == True:
-                        k_str = f'in Kick ->{kicked}|{currentAction.get_current_id()}'
+                    if kick_detected==True:
+                        k_str=f'in Kick ->{kicked}|{currentAction.get_current_id()}'
                     else:
-                        k_str = f'Not in kick ->{kicked}|{currentAction.get_current_id()}'
+                        k_str=f'Not in kick ->{kicked}|{currentAction.get_current_id()}'
                         currentAction.stop_action(det_obj.x_2d, det_obj.y_2d, cycle, det_obj.position)
                     prev_acceleration = moving_average_acceleration
                     ball_data = BallCoordsObj(cam.camera_id, det_obj.x_2d, det_obj.y_2d,int(cent_x), int(cent_y), 
@@ -168,7 +174,7 @@ def process_detection_results(publisher, detector, cycle):
 
     overall_stat.cycle_cntr+=1
     for cam in cameras:
-        if cam.capture_only_device == False:
+        if cam.capture_only_device ==False:
             cam_info = CamInfo()
             cam_info.id = cam.camera_id
             cam_info.name = cam.description
@@ -200,8 +206,8 @@ def process_detection_results(publisher, detector, cycle):
     stat.overall_detection_rate = overall_stat.detection_rate
     players_collection = None
     players_collection_ttl=0
-    goal_l_cam = None
-    goal_r_cam = None
+    goal_l_cam=None
+    goal_r_cam=None
     for cam in cameras:
         if cam.camera_id ==11:
             goal_l_cam=cam
@@ -240,21 +246,16 @@ def process_detection_results(publisher, detector, cycle):
                                 det_obj.ball_speed_kmh, "km/h", "dir:", det_obj.ball_direction)
                     except:
                         pass 
-                    ball_point_x=-1
+                    ball_point_x = -1
                     ball_point_y = -1
                     ball_point_x_2d=-1
                     ball_point_y_2d = -1
                     ball_radius = 0
                     if (det_obj.x1 > 0):
-                        center_x, center_y = (det_obj.x1 + det_obj.x2) // 2, (det_obj.y1 + det_obj.y2) // 2
-                        radius = min(det_obj.x2 - det_obj.x1, det_obj.y2 - det_obj.y1) // 2
-                        ball_radius = radius
-                        # draw ball circle
-                        cv2.circle(frame, (center_x, center_y), radius, (0, 0, 255), -1)
-                        cv2.circle(frame, (center_x, center_y), radius+1, (255, 0, 0), 1)
-                        cv2.circle(frame, (center_x, center_y), radius+2, (0, 0, 0), 1)
-                        ball_point_x =  (det_obj.x1+det_obj.x2)/2
-                        ball_point_y =  (det_obj.y1+det_obj.y2)/2
+                        cv2.rectangle(frame, (det_obj.x1, det_obj.y1), (det_obj.x2, det_obj.y2), (0, 0, 255), 2)
+                        cv2.putText(frame, f"ball {det_obj.confidence:.2f}", (det_obj.x1 - 10, det_obj.y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                        ball_point_x =  (det_obj.x1 + det_obj.x2) / 2
+                        ball_point_y =  (det_obj.y1 + det_obj.y2) / 2
                         ball_point_x_2d = det_obj.x_2d
                         ball_point_y_2d = det_obj.y_2d
                     if len(det_obj.players) > 0:
@@ -263,8 +264,8 @@ def process_detection_results(publisher, detector, cycle):
                     else:
                         players_collection_ttl -= 1
                     if players_collection_ttl > 0:
-                        closest_player=None
-                        closest_distance=None
+                        closest_player = None
+                        closest_distance = None
                         closet_player_width = None
                         distance=-1
                         player_collection = players_pb2.FootPlayerCollection()
@@ -282,7 +283,7 @@ def process_detection_results(publisher, detector, cycle):
                         player_collection.ball_y_2d = int(ball_point_y_2d)
                         
                         for player in players_collection:
-                            if (player.x1 != -1):
+                            if (player.x1!=-1):
                                 player.x_2d, player.y_2d = cam.convert_player_to_2d(int((player.x1+player.x2)/2), int(player.y2)-15)
                                 bounding_img = det_obj.frame[player.y1:player.y2,player.x1:player.x2]
                                 player.player_id = player_tracker.register(bounding_img, player, cycle, det_obj.position)
@@ -310,14 +311,16 @@ def process_detection_results(publisher, detector, cycle):
                                         closest_distance = distance
                                         closest_player = player
                                         closet_player_width = player.x2 - player.x1
-                                cv2.rectangle(frame, (int(player.x1), int(player.y1)), (int(player.x2), int(player.y2)), (0, 255, 0), 2)
+                                color = TEAM_COLORS.get(player.team_id, (0, 255, 0))
+                                cv2.rectangle(frame, (int(player.x1), int(player.y1)),(int(player.x2), int(player.y2)), color, 2)
+                                cv2.putText(frame, f"T{player.team_id}", (int(player.x1), int(player.y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
                                 player.cam_id = cam.camera_id
                                 player.ball_distance = distance
                                 player.ball_x = ball_point_x
                                 player.ball_y = ball_point_y
 
-                                if (player.x_2d > 0 and player.y_2d < 0):
-                                    player.y_2d = 0
+                                if (player.x_2d > 0 and player.y_2d <0):
+                                    player.y_2d=0
                                 gameplayer_collection.add_to_collection(det_obj.position, player)
 
                         player_publisher.send(player_collection)
@@ -326,11 +329,12 @@ def process_detection_results(publisher, detector, cycle):
                             currentAction.add_player(0,bounding_img, cycle, det_obj.position)
                             wwidth = 2
                             display_rect = True
-                            ccolor = (0, 255, 0)
+                            ccolor = TEAM_COLORS.get(closest_player.team_id, (0, 255, 0))
                             ball_obj = ball_coords.get_ball_data_by_position(det_obj.position)
                             if ball_obj is not None and ball_obj.kicked==True:
                                 wwidth = 10
-                                ccolor = (0, 0, 255)
+                                if closest_player.team_id == -1:
+                                    ccolor = (0, 0, 255)
                             elif ball_obj is not None and ball_obj.kick_detected==True:
                                 display_rect = False
                             if display_rect == True:
@@ -400,11 +404,11 @@ def main() -> None:
         rpc_publisher.send(restart_session_rpc())
         
     req_snt = False
-    detector_cycle_live = -1
+    detector_cycle_live=-1
     passed_cycles = 0
     detector_started = False
     start_time = time.time()
-    while (thread_running.value == 1 and ecal_core.ok()):
+    while (thread_running.value==1 and ecal_core.ok()):
         time.sleep(0.005)
         current_time = time.time()
         elapsed_time = current_time - start_time
@@ -431,7 +435,7 @@ def main() -> None:
                 passed_cycles += 1
                 break
 
-        if passed_cycles > 2 and detector_started==False:
+        if passed_cycles>2 and detector_started==False:
             detector_started = True
             detector.start_cycle(detector_cycle_live-1)
         
@@ -606,9 +610,9 @@ def check_speed_decelerate_trend(speeds):
     return 
 
 def display_frames(thread_running, displayQueue, feedbackQueue):
-    score_cntr_l = 0
-    score_cntr_r = 0 
-    match_time = "00:00"
+    score_cntr_l=0
+    score_cntr_r=0 
+    match_time="00:00"
 
     cntr = 0
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -730,13 +734,13 @@ def display_frames(thread_running, displayQueue, feedbackQueue):
                 total_nbr_of_displayed_players = 0
                 player_box_size=20
                 for player in players_collection:
-                    if player.x_2d>0 and player.y_2d>0:
-                        xx = int(20 + player.x_2d+pitch_shift_x - player_box_size / 2)
-                        yy = int(pitch_shift_y+17+player.y_2d - player_box_size / 2 )
+                    if player.x_2d > 0 and player.y_2d > 0:
+                        xx = int(20 + player.x_2d + pitch_shift_x - player_box_size / 2)
+                        yy = int(pitch_shift_y + 17 + player.y_2d - player_box_size / 2 )
                         total_nbr_of_displayed_players+=1
-                        ccol=(250,160,0)
+                        ccol = TEAM_COLORS.get(player.team_id, (250,160,0))
                         if player.closest:
-                            ccol =  (0,255,0)
+                            ccol = tuple(min(255, c + 50) for c in ccol)
 
                         cv2.rectangle(combined_frame,(xx,yy),(xx+player_box_size,yy+player_box_size),ccol, -1)
                         cv2.putText(combined_frame,  f"{player.player_id:02}", (xx+2, yy+12), cv2.FONT_HERSHEY_PLAIN, 0.9, [0,0,255], thickness=1) 
@@ -795,12 +799,12 @@ def display_frames(thread_running, displayQueue, feedbackQueue):
                             if (ball.x <3 and ball.x>-12 and ball.y<142 and ball.y>98):
                                 distance_to_L_goal_line = 0
                             distance_to_R_goal_line = round(distance_point_to_line(496,96,496,149,ball.x, ball.y)/500*25,1)
-                            if (ball.x > 496 and ball.x < 514 and ball.y < 142 and ball.y > 98):
+                            if (ball.x >496 and ball.x<514 and ball.y<142 and ball.y>98):
                                 distance_to_R_goal_line = 0
 
-                            if  goal_hold_back_l<goal_holdback_frames - 5 and distance_to_L_goal_line > 2.2:
+                            if  goal_hold_back_l<goal_holdback_frames-5 and distance_to_L_goal_line>2.2:
                                 goal_hold_back_l = -1
-                            if  goal_hold_back_r < goal_holdback_frames - 5 and distance_to_R_goal_line > 2.2:
+                            if  goal_hold_back_r<goal_holdback_frames-5 and distance_to_R_goal_line>2.2:
                                 goal_hold_back_r = -1
                             current_distance_to_l = distance_to_L_goal_line
                             current_distance_to_r = distance_to_R_goal_line                       
@@ -813,13 +817,14 @@ def display_frames(thread_running, displayQueue, feedbackQueue):
                 if multiball_alert:
                     print_txt2(combined_frame, 20,720,f'MULTIBALL ALERT!!!!')
                 print_txt2(combined_frame, 20,700,f'MULTIBALL ALERT CNTR: {multiball_alert_cntr}' )
+                
                 ball_pos_history.append((last_ball_x_real, last_ball_y_real, last_ball_ttl, distance_to_L_goal_line, distance_to_R_goal_line))
                 
-                if printed==False and last_ball_ttl>0:
+                if printed == False and last_ball_ttl>0:
                         ttl_left = (max_ttl-last_ball_ttl)
-                        ballshrink = ttl_left*step_ball
-                        shift = ttl_left*step
-                        ccolor_lost=(100+shift,100+shift,255)
+                        ballshrink = ttl_left * step_ball
+                        shift = ttl_left * step
+                        ccolor_lost = (100 + shift,100 + shift, 255)
                         last_ball_ttl-=1
                         if (ballshrink<ball_rad):
                             cv2.circle(combined_frame, (last_ball_x, last_ball_y), int(ball_rad - ballshrink), ccolor_lost, -1)

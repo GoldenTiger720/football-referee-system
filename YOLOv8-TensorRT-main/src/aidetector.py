@@ -766,29 +766,6 @@ class AIDetector:
         grass_color = cv2.mean(img, mask=mask)
         return grass_color[:3]
     
-    def process_detections(self, output, orig_shape, W, H):
-        num_dets, bboxes, scores, labels = output
-        num_dets = int(num_dets[0])
-        
-        # Extract valid detections
-        bboxes = bboxes[0, :num_dets]
-        scores = scores[0, :num_dets]
-        labels = labels[0, :num_dets]
-        
-        # Convert boxes to [x1, y1, x2, y2] format and scale to original image dimensions
-        orig_h, orig_w = orig_shape[:2]
-        boxes = []
-        for bbox in bboxes:
-            x1, y1, x2, y2 = bbox
-            # Scale coordinates to original frame dimensions
-            x1 = int(x1 * orig_w / W)
-            y1 = int(y1 * orig_h / H)
-            x2 = int(x2 * orig_w / W)
-            y2 = int(y2 * orig_h / H)
-            boxes.append([x1, y1, x2, y2])
-        
-        return np.array(boxes), scores.cpu().numpy(), labels.cpu().numpy()
-    
     def process_frame(self, camera, cycle_id, det_obj, Engine, W, H):
         width, height = 2300, 896
 
@@ -808,6 +785,7 @@ class AIDetector:
 
         bboxes, scores, labels = det_postprocess(data)
         highest_score_ball = -1
+        player_img = None
         if bboxes.numel() == 0:
             pass
         else:
@@ -831,20 +809,21 @@ class AIDetector:
                         player.y2 = int(y2)
                         player.confidence = round(float(score), 2)
                         det_obj.players.append(player)
+                        player_img = resized_frame[player.y1:player.y2, player.x1:player.x2]
+                        
                 if (cls_id == CLASSID_BALL) and score >= self.ai_settings.ball_confidence:
                     if score < highest_score_ball:
                         det_obj.ball += 1
                     else:
                         MIN_BALL_SIZE = self.ai_settings.min_ball_size   #12
                         rad = min(abs(int(x2) - int(x1)), abs(int(y2) - int(y1)))
-
                         if (rad >= MIN_BALL_SIZE):
                             if self.ai_settings.ball_do_deep_check == True:
                                 det_obj.mean_saturation, det_obj.mean_value, det_obj.white_gray = self.deep_check2(cycle_id, det_obj.frame, x1, y1, x2, y2)
                                 if (det_obj.mean_saturation > self.ai_settings.ball_mean_saturation or det_obj.mean_value < self.ai_settings.ball_mean_value):
                                     continue                        
                             highest_score_ball = score
-                            det_obj.ball +=1
+                            det_obj.ball += 1
                             det_obj.x1 = int(x1)
                             det_obj.x2 = int(x2)
                             det_obj.y1 = int(y1)

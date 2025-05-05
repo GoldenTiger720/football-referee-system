@@ -108,7 +108,7 @@ class DetectorStats:
         self.overall_detection_rate = 0
 
 class Frame:
-    def __init__(self, frame, camera_id, frame_id, timestamp, slave = False):
+    def __init__(self, frame, camera_id, frame_id, timestamp, slave = False):#position is the position within the second 0 - 24
         self.frame_id = frame_id
         self.timestamp = timestamp
         self.camera_id = camera_id
@@ -128,7 +128,7 @@ class PlayerCollection:
     def get_collection(self, key):
         players =  self.data.get(key, [])  # Return the collection if key exists, otherwise return an empty list
         
-        if (len(players) > 0):
+        if (len(players)>0):
             self.last_good_collection = players
             self.last_good_collection_ttl = 3
         else:
@@ -159,6 +159,7 @@ class Player:
         self.centery=-1
         self.last_used_idx=-1
         self.img = None
+        self.team_id = -1
 
 class Detector:
     def __init__(self,camera_id, frame, frame_id, timestamp, detection_type=DetectionType.NORMAL):
@@ -196,7 +197,7 @@ class Detector:
         self.fake = False
 
 class Camera:
-    def __init__(self, field_id, id, path, thread_running,frame_start, max_fps, feed_fps, description, detection_type = DetectionType.NORMAL , capture_only_device = False, slaves=[]):
+    def __init__(self, field_id, id, path, thread_running,frame_start, max_fps, feed_fps, description, detection_type=DetectionType.NORMAL , capture_only_device = False, slaves=[]):
         self.next_frame_please = mp.Value('i', 7)
         self.output_queue =  mp.Queue()
         self.slaves = slaves
@@ -219,23 +220,28 @@ class Camera:
         self.device = None
         self.W = 0
         self.H = 0
-        self.frame_w = 0
-        self.frame_h = 0
-        self.callback_cntr = 0
+        self.frame_w=0
+        self.frame_h=0
+        self.callback_cntr=0
         self.transformation_matrix = None
         self.reference_frame_saved = False
         self.current_live_cycle = -1
 
-        self.camera_mapper = CameraMapper(f'mapping_field{field_id}_cam{self.camera_id}.json')
+        self.camera_mapper=CameraMapper(f'mapping_field{field_id}_cam{self.camera_id}.json')
         sub = ProtoSubscriber(f'video_topic_{self.camera_id}'
                             , frame_pb2.FrameData)
+
+        # Set the Callback
         sub.set_callback(self.callback)
-        if path != "":
+
+        if path!="":
             pass
         else:
             print(f'*** WARNING: CAM {self.camera_id} is a Slave stream only! Used for storage only.')
+
         if capture_only_device:
             print(f'*** WARNING: CAM {self.camera_id} is a capture only device providing frames for slaves!')
+        
         self.detector_cycle_current = 1
 
     def set_executor_cycle(self, cycle):
@@ -247,7 +253,7 @@ class Camera:
                 self.current_live_cycle = frame_proto_msg.cycle
             frame_array = np.frombuffer(frame_proto_msg.frame, dtype=np.uint8)
             frame = frame_array.reshape((frame_proto_msg.height, frame_proto_msg.width, channels))
-            if (self.camera_id == 10 or self.camera_id == 11):
+            if (self.camera_id==10 or self.camera_id == 11):
                 frame = self.enhance_contrast_and_whiten(frame).copy()
                 if frame is None:
                     return
@@ -255,10 +261,11 @@ class Camera:
             self.frame_h = frame_proto_msg.height
             frm = Frame(frame, frame_proto_msg.camera_id, frame_proto_msg.frame_id, frame_proto_msg.unix_timestamp)
             self.register_frame(frm, frame_proto_msg.cycle, frame_proto_msg.position)
-            self.callback_cntr += 1
-            if self.reference_frame_saved == False:
-                self.reference_frame_saved = True
+            self.callback_cntr+=1
+            if self.reference_frame_saved==False:
+                self.reference_frame_saved=True
                 cv2.imwrite(f'XXX{self.camera_id}_{self.callback_cntr}.png', frame)
+
 
     def apply_white_balance(self,image):
         # Convert the image to LAB color space
@@ -279,21 +286,12 @@ class Camera:
         return balanced_image
 
     def increase_contrast(self, image, factor=1.15):
-        # Convert the image to float32 for better precision
         image = np.float32(image)
-        
-        # Increase contrast by the given factor
         contrasted_image = image * factor
-        
-        # Clip the values to [0, 255] range
         contrasted_image = np.clip(contrasted_image, 0, 255)
-        
-        # Convert back to uint8
         contrasted_image = np.uint8(contrasted_image)
-        
         return contrasted_image
-
-            #global_executor.submit(self.check,self.executor_cycle)
+    
     def enhance_contrast_and_whiten(self, image):
         if image is None:
             return None
@@ -316,15 +314,12 @@ class Camera:
         min_val = np.min(enhanced_img)
         max_val = np.max(enhanced_img)
         enhanced_img = ((enhanced_img - min_val) / (max_val - min_val) * 255).astype(np.uint8)
-
-        # Ensure true white (255, 255, 255)
         white_pixel_indices = np.all(enhanced_img == [255, 255, 255], axis=-1)
         enhanced_img[white_pixel_indices] = [255, 255, 255]
 
         return enhanced_img
 
     def convert_to_3d(self, x_2d, y_2d):
-
         x,y = self.camera_mapper.estimate_3d_coordinate(x_2d, y_2d)
         return x,y
 
@@ -332,12 +327,7 @@ class Camera:
         if (det_obj.confidence>0):
             x = (det_obj.x1+det_obj.x2)/2
             y = (det_obj.y1+det_obj.y2)/2
-            
-            #if self.camera_id==3:
-            #    x=x-150
-            
             det_obj.ball_radius = min((det_obj.x2 - det_obj.x1), (det_obj.y2 - det_obj.y1)) / 2
-
             det_obj.x_2d, det_obj.y_2d = self.camera_mapper.estimate_2d_coordinate(x, y)
 
     def convert_player_to_2d(self, x, y):
@@ -391,18 +381,31 @@ class Camera:
     def detector_cycle_completed(self, detector_cycle):
         cycle_to_delete = detector_cycle #we delete only older once as we still need the data from the one that just completed
         try:
-            del self.detector_objects[cycle_to_delete]
+            if cycle_to_delete in self.detector_objects:
+                del self.detector_objects[cycle_to_delete]
         except KeyError:
             print(f'Key {detector_cycle} does not exist in the collection.')
 
     def reset_segment(self, detector_cycle):
+        """Reset segment and clean up old detector objects"""
         try:
-            lowest_key = min(int(key) for key in self.detector_objects.keys())
-            highest_key = max(int(key) for key in self.detector_objects.keys())
-            if (lowest_key>0 and highest_key-lowest_key>6):
-                self.detector_cycle_completed(lowest_key)
-        except:
-            print("Error while reetting segment....")
+            # Clean up old detector objects
+            if len(self.detector_objects) > 0:
+                lowest_key = min(int(key) for key in self.detector_objects.keys())
+                highest_key = max(int(key) for key in self.detector_objects.keys())
+                
+                # Keep only recent cycles to prevent memory issues
+                if highest_key - lowest_key > 6:
+                    # Remove old cycles
+                    for key in list(self.detector_objects.keys()):
+                        if int(key) < highest_key - 5:
+                            try:
+                                del self.detector_objects[key]
+                            except KeyError:
+                                pass
+        except Exception as e:
+            print(f"Error while resetting segment: {e}")
+        
         self.detector_cycle_current = detector_cycle
 
     def get_frame(self, detector_cycle, frame_pos):
@@ -471,7 +474,7 @@ class Camera:
         return last, last_det
     
     def get_detector_collection(self, detector_cycle, detection_type = DetectionType.NORMAL):
-        if self.detection_type != detection_type:
+        if self.detection_type!= detection_type:
             return []
         return self.detector_objects[detector_cycle]
     
@@ -484,6 +487,7 @@ class Camera:
         return frame
 
     def capture(self, frame_start):
+        print("TR2:", self.thread_running.value)
         device = torch.device("cuda:0")
         ecal_core.initialize([], f'CAM{self.camera_id} Publisher')
         pubs=[]
@@ -543,16 +547,16 @@ class Camera:
                     total_frames_captures+=1
 
             #-------- skip frames if needed ------
-            fps_step_cntr += 1
+            fps_step_cntr+=1
             curr_fps_nbr = round(fps_step_cntr*fps_step)
             if (curr_fps_nbr == last_step_nbr):
                 success, frame = cap.read()
-                total_frames_captures += 1
-                fps_step_cntr += 1
+                total_frames_captures+=1
+                fps_step_cntr+=1
             last_step_nbr = curr_fps_nbr
             self.frame_id = int((time.perf_counter()*1000 - frame_start.value)/(frame_time))
             if success:
-                err_cntr = 0
+                err_cntr=0
                 timestamp = int(time.perf_counter() * 1000)
                 if (self.camera_id==4):
                     res_start = time.perf_counter()
@@ -560,8 +564,8 @@ class Camera:
                     cropped_frame = frame[468:1368, 244:2544]
                     width = 1200
                     height = 384
-                    fwidth = 640
-                    fheight = 384
+                    fwidth=640
+                    fheight=384
                     frame = cv2.resize(cropped_frame, (width, height), interpolation=cv2.INTER_LINEAR)
                     frame = self.enhance_frame(frame)
                     width_half, height_half = int(width/2), int(height/2)
@@ -577,6 +581,7 @@ class Camera:
                     pubs[1].send(create_protobuf(self.frame_id, self.slaves[0], slices[0], timestamp, fwidth, fheight))
                     pubs[2].send(create_protobuf(self.frame_id, self.slaves[1], slices[1], timestamp, fwidth, fheight))
                     pubs[3].send(create_protobuf(self.frame_id, self.slaves[2], both_goals, timestamp, goal_size * 2, goal_size))
+
                     res_elapsed = (time.perf_counter() - res_start) * 1000
                 else:
                     frame = cv2.resize(frame, (640, 384), interpolation=cv2.INTER_LINEAR)
