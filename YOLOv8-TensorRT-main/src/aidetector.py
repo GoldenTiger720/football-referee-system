@@ -25,6 +25,90 @@ TEAM_COLORS = {
     -1: (0, 255, 0)    # Unknown/Referee (Green)
 }
 
+class PlayerTracker:
+    def __init__(self):
+        self.player_history = {}  # Dictionary to store player tracking data
+        self.next_id = 0  # Counter for assigning unique player IDs
+        
+    def register(self, player_img, player, cycle, position):
+        """Register or re-identify a player"""
+        # Calculate player center
+        center_x = (player.x1 + player.x2) // 2
+        center_y = (player.y1 + player.y2) // 2
+        
+        # Check if player matches any previously tracked player
+        matched_id = None
+        min_distance = 100  # 100-pixel threshold as suggested
+        
+        for player_id, data in self.player_history.items():
+            if abs(cycle - data['last_seen_cycle']) > 50:  # Expire very old entries
+                continue
+                
+            # Calculate distance to last known position
+            last_x = data['last_position'][0]
+            last_y = data['last_position'][1]
+            
+            # If we have velocity data, predict current position
+            if 'velocity' in data and data['velocity'] is not None:
+                cycles_passed = cycle - data['last_seen_cycle']
+                pred_x = last_x + data['velocity'][0] * cycles_passed
+                pred_y = last_y + data['velocity'][1] * cycles_passed
+                distance = math.sqrt((center_x - pred_x)**2 + (center_y - pred_y)**2)
+            else:
+                distance = math.sqrt((center_x - last_x)**2 + (center_y - last_y)**2)
+            
+            if distance < min_distance:
+                min_distance = distance
+                matched_id = player_id
+        
+        if matched_id is not None:
+            # Re-identified player - update with current position
+            player_data = self.player_history[matched_id]
+            
+            # Calculate velocity if we have previous position
+            if player_data['last_position'] is not None:
+                last_x, last_y = player_data['last_position']
+                cycles_passed = cycle - player_data['last_seen_cycle']
+                if cycles_passed > 0:
+                    vel_x = (center_x - last_x) / cycles_passed
+                    vel_y = (center_y - last_y) / cycles_passed
+                    player_data['velocity'] = (vel_x, vel_y)
+            
+            # Update player data
+            player_data['last_position'] = (center_x, center_y)
+            player_data['last_seen_cycle'] = cycle
+            player_data['position_history'].append((center_x, center_y, cycle))
+            
+            # Maintain consistent team ID
+            if 'team_id' in player_data and player_data['team_id'] != -1:
+                player.team_id = player_data['team_id']
+            
+            return matched_id
+        else:
+            # New player - assign new ID
+            new_id = self.next_id
+            self.next_id += 1
+            
+            # Store player data with initial team_id of -1 (unknown)
+            self.player_history[new_id] = {
+                'last_position': (center_x, center_y),
+                'last_seen_cycle': cycle,
+                'position_history': [(center_x, center_y, cycle)],
+                'velocity': None,
+                'team_id': player.team_id  # Store whatever team_id is currently assigned
+            }
+            
+            return new_id
+    
+    def update_team_id(self, player_id, team_id):
+        """Update team ID for a specific player"""
+        if player_id in self.player_history:
+            # Only update if the current value is -1 (unknown) or the same
+            if self.player_history[player_id]['team_id'] == -1 or self.player_history[player_id]['team_id'] == team_id:
+                self.player_history[player_id]['team_id'] = team_id
+                return True
+        return False
+
 class AIDetector:
     def __init__(self, ai_settings, cameras, paralell_models, max_fps) -> None:
         logging.basicConfig(level=logging.DEBUG, filename='detector.log', filemode='w',
@@ -74,6 +158,7 @@ class AIDetector:
         self.team_colors = None
         self.current_frame_idx = 0
         self.accumulated_kit_colors = []
+        self.player_tracker = PlayerTracker()
         
         # Initialize the classifier as None - will be populated once we have enough data
         self.labels_name = {
@@ -936,12 +1021,18 @@ class AIDetector:
                         # Calculate center coordinates for the player
                         player.centerx = (player.x1 + player.x2) // 2
                         player.centery = (player.y1 + player.y2) // 2
+                         # Add player image for team classification
+                        player_img = resized_frame[int(player.y1):int(player.y2), int(player.x1):int(player.x2)]
+                        player.player_id = self.player_tracker.register(player_img, player, cycle_id, det_obj.position)
                         
-                        # Add player image for team classification
-                        player_img = resized_frame[player.y1:player.y2, player.x1:player.x2]
+                       
                         if player_img.shape[0] > 0 and player_img.shape[1] > 0:
+                            player.player_id = self.player_tracker.register(player_img, player, cycle_id, det_obj.position)
                             player_imgs.append(player_img)
                             player_boxes.append([player.x1, player.y1, player.x2, player.y2])
+                        else:
+                            # Handle case where player image is invalid
+                            player.player_id = -1
                         
                         det_obj.players.append(player)
                         
@@ -977,7 +1068,7 @@ class AIDetector:
                             det_obj.confidence = -1
             
             # Process team classification if we have player images
-            if len(player_imgs) >= 2:
+            if cycle_id % 5 == 0 and len(player_imgs) >= 2:
                 # Get grass color if not already defined
                 if self.grass_hsv is None and det_obj.frame is not None:
                     grass_color = self.get_grass_color(det_obj.frame)
@@ -988,11 +1079,11 @@ class AIDetector:
                 
                 # Add to accumulated kit colors for more robust classification
                 self.accumulated_kit_colors.extend(kit_colors)
-                if len(self.accumulated_kit_colors) > 100:
+                if len(self.accumulated_kit_colors) > 50:
                     self.accumulated_kit_colors = self.accumulated_kit_colors[-50:]  # Keep last 100 samples
                 
                 # Initialize team classifier if we have enough data
-                if self.kits_clf is None and len(self.accumulated_kit_colors) >= 20:
+                if (self.kits_clf is None or cycle_id % 100 == 0) and len(self.accumulated_kit_colors) >= 20:
                     print(f"Initializing team classification with {len(self.accumulated_kit_colors)} kit colors")
                     self.kits_clf = self.get_kits_classifier(self.accumulated_kit_colors)
                     if self.kits_clf is not None:
@@ -1016,9 +1107,10 @@ class AIDetector:
                                     player.team_id = 0  # Left team (blue in TEAM_COLORS)
                                 else:
                                     player.team_id = 1  # Right team (red in TEAM_COLORS)
-                            else:
                                 # Temporary assignment before left_team_label is determined
                                 player.team_id = int(team_predictions[i])
+                                if player.player_id >= 0:
+                                    self.player_tracker.update_team_id(player.player_id, player.team_id)
                         else:
                             # Default assignment
                             player.team_id = -1
